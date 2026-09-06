@@ -455,9 +455,16 @@ html[dir='ltr'] .select {
   font-weight: 600;
   color: var(--text-secondary);
   min-height: 44px;
+  width: 100%;
   text-align: center;
   padding: 4px;
   transition: all 200ms ease;
+  font-family: inherit;
+  appearance: none;
+}
+
+.shelf-cell:disabled {
+  cursor: default;
 }
 
 .shelf-cell.highlight {
