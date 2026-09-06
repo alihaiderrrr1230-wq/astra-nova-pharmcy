@@ -1,4 +1,12 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import {
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+  createContext,
+  useContext,
+  createElement,
+} from 'react';
 import {
   STORAGE_KEY,
   DEFAULT_PHRASES,
@@ -10,7 +18,17 @@ import {
   DEFAULT_DEBTS,
   DEFAULT_SALES_LOG,
   DEFAULT_SETTINGS,
+  DEFAULT_SHELF_COLUMNS,
+  SHELF_COLOR_PALETTE,
 } from '../data/mockData.js';
+import {
+  isFileSystemAccessSupported,
+  getSavedFolderHandle,
+  pickFolder,
+  forgetFolder,
+  readDataFile,
+  writeDataFile,
+} from '../utils/fsStore.js';
 
 // ---------------------------------------------------------------------
 // localStorage-backed Astra store. The single key holds the entire app
@@ -52,7 +70,20 @@ function loadInitial() {
       return seed;
     }
     const parsed = JSON.parse(raw);
-    return { ...buildDefault(), ...parsed };
+    const base = buildDefault();
+    return {
+      ...base,
+      ...parsed,
+      // Deep-merge settings so newly introduced default fields (e.g.
+      // hasPinSet, clinicName, exchangeRate) reach users upgrading from
+      // an older saved state, instead of being wiped by a full overwrite.
+      settings: { ...base.settings, ...(parsed.settings || {}) },
+      shelfColumns:
+        Array.isArray(parsed.shelfColumns) && parsed.shelfColumns.length > 0
+          ? parsed.shelfColumns
+          : base.shelfColumns,
+      customNeeds: Array.isArray(parsed.customNeeds) ? parsed.customNeeds : [],
+    };
   } catch (e) {
     console.error('Astra: failed to load state, reseeding.', e);
     const seed = buildDefault();
@@ -78,6 +109,10 @@ function buildDefault() {
     salesLog: [...DEFAULT_SALES_LOG],
     cart: [],
     highlighterShelf: null, // shelf code currently highlighted on the loop screen
+    // Fully customizable shelf-map columns: label, color, row count and
+    // display order are all editable from the Shelf Map page itself.
+    shelfColumns: DEFAULT_SHELF_COLUMNS.map((c) => ({ ...c })),
+    customNeeds: [], // free-form "needs list" items, independent of low-stock auto entries
   };
 }
 
@@ -99,7 +134,7 @@ function makeId(prefix) {
 // ---------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------
-export function useAstraStore() {
+function useAstraStoreInternal() {
   const [state, setState] = useState(loadInitial);
   // NPS state lives in its own localStorage key (not the main store
   // blob) so the rest of the schema can change without losing the
@@ -107,18 +142,93 @@ export function useAstraStore() {
   const [nps, setNps] = useState(loadNps);
   const stateRef = useRef(state);
 
+  // ---- Flash-drive data store (File System Access API) ----
+  // 'unsupported' | 'disconnected' | 'connecting' | 'connected'
+  const [flashStatus, setFlashStatus] = useState(
+    isFileSystemAccessSupported() ? 'disconnected' : 'unsupported'
+  );
+  const [flashFolderName, setFlashFolderName] = useState('');
+  const flashHandleRef = useRef(null);
+  const flashHydrated = useRef(false); // avoid writing back the file we just read from it
+
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
 
-  // Persist on every change.
+  // On mount: silently try to reconnect to a previously-granted flash
+  // folder (no prompt — only succeeds if the browser still remembers
+  // the permission grant). If found, its data file becomes the source
+  // of truth for this session.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const handle = await getSavedFolderHandle();
+      if (!handle || cancelled) return;
+      flashHandleRef.current = handle;
+      const data = await readDataFile(handle);
+      if (cancelled) return;
+      if (data) {
+        flashHydrated.current = true;
+        setState((s) => ({ ...s, ...data }));
+      }
+      setFlashFolderName(handle.name || 'الفلاش');
+      setFlashStatus('connected');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Persist on every change — always to localStorage (safe fallback),
+  // and additionally to the flash file when one is connected.
   useEffect(() => {
     persist(state);
+    if (flashHandleRef.current) {
+      if (flashHydrated.current) {
+        // Skip the one write that would just echo back the data we
+        // literally just read from this same file on connect.
+        flashHydrated.current = false;
+      } else {
+        writeDataFile(flashHandleRef.current, state).catch((e) => {
+          console.error('Astra: failed to write to flash drive.', e);
+        });
+      }
+    }
   }, [state]);
 
   useEffect(() => {
     persistNps(nps);
   }, [nps]);
+
+  // User-initiated: open the OS folder picker, then either adopt the
+  // data already on the flash drive (if any) or seed it with the
+  // current in-app state (first-time setup on a blank drive).
+  const connectFlashDrive = useCallback(async () => {
+    setFlashStatus('connecting');
+    try {
+      const handle = await pickFolder();
+      flashHandleRef.current = handle;
+      const existing = await readDataFile(handle);
+      if (existing) {
+        setState((s) => ({ ...s, ...existing }));
+      } else {
+        await writeDataFile(handle, stateRef.current);
+      }
+      setFlashFolderName(handle.name || 'الفلاش');
+      setFlashStatus('connected');
+      return { ok: true };
+    } catch (e) {
+      setFlashStatus(isFileSystemAccessSupported() ? 'disconnected' : 'unsupported');
+      return { ok: false, error: e?.message || 'تعذّر الاتصال بالفلاش.' };
+    }
+  }, []);
+
+  const disconnectFlashDrive = useCallback(async () => {
+    await forgetFolder();
+    flashHandleRef.current = null;
+    setFlashFolderName('');
+    setFlashStatus(isFileSystemAccessSupported() ? 'disconnected' : 'unsupported');
+  }, []);
 
   // Apply theme + language to <html> whenever they change.
   useEffect(() => {
@@ -306,7 +416,10 @@ export function useAstraStore() {
   // PIN
   // -----------------------------------------------------------------
   const setPin = useCallback((newPin) => {
-    setState((s) => ({ ...s, settings: { ...s.settings, pin: newPin } }));
+    setState((s) => ({
+      ...s,
+      settings: { ...s.settings, pin: newPin, hasPinSet: true },
+    }));
   }, []);
 
   // -----------------------------------------------------------------
@@ -325,6 +438,52 @@ export function useAstraStore() {
 
   const removeEmployee = useCallback((id) => {
     setState((s) => ({ ...s, employees: s.employees.filter((e) => e.id !== id) }));
+  }, []);
+
+  // ---- Employee documents (مستمسكات) — an unbounded list of {label,value}
+  // pairs per employee (national ID, address, or anything else). ----
+  const addEmployeeDocument = useCallback((employeeId, label = '', value = '') => {
+    setState((s) => ({
+      ...s,
+      employees: s.employees.map((e) =>
+        e.id === employeeId
+          ? {
+              ...e,
+              documents: [
+                ...(e.documents || []),
+                { id: makeId('doc'), label, value },
+              ],
+            }
+          : e
+      ),
+    }));
+  }, []);
+
+  const updateEmployeeDocument = useCallback((employeeId, docId, patch) => {
+    setState((s) => ({
+      ...s,
+      employees: s.employees.map((e) =>
+        e.id === employeeId
+          ? {
+              ...e,
+              documents: (e.documents || []).map((d) =>
+                d.id === docId ? { ...d, ...patch } : d
+              ),
+            }
+          : e
+      ),
+    }));
+  }, []);
+
+  const removeEmployeeDocument = useCallback((employeeId, docId) => {
+    setState((s) => ({
+      ...s,
+      employees: s.employees.map((e) =>
+        e.id === employeeId
+          ? { ...e, documents: (e.documents || []).filter((d) => d.id !== docId) }
+          : e
+      ),
+    }));
   }, []);
 
   // -----------------------------------------------------------------
@@ -355,6 +514,88 @@ export function useAstraStore() {
 
   const removeDebt = useCallback((id) => {
     setState((s) => ({ ...s, debts: s.debts.filter((d) => d.id !== id) }));
+  }, []);
+
+  // -----------------------------------------------------------------
+  // Shelf map columns — fully customizable (label, color, row count,
+  // display order). Column `id` stays stable so existing medicine
+  // `shelf` codes (e.g. "A-1-1") keep resolving correctly even after
+  // relabeling; only the *display* label/color/order change.
+  // -----------------------------------------------------------------
+  const updateShelfColumn = useCallback((id, patch) => {
+    setState((s) => ({
+      ...s,
+      shelfColumns: s.shelfColumns.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+    }));
+  }, []);
+
+  const moveShelfColumn = useCallback((id, direction) => {
+    setState((s) => {
+      const cols = [...s.shelfColumns].sort((a, b) => a.order - b.order);
+      const idx = cols.findIndex((c) => c.id === id);
+      const swapWith = direction === 'up' ? idx - 1 : idx + 1;
+      if (idx === -1 || swapWith < 0 || swapWith >= cols.length) return s;
+      [cols[idx].order, cols[swapWith].order] = [cols[swapWith].order, cols[idx].order];
+      return { ...s, shelfColumns: cols };
+    });
+  }, []);
+
+  const addShelfColumn = useCallback(() => {
+    setState((s) => {
+      // Next unused letter (A, B, C… Z) based on existing column ids.
+      const usedLetters = new Set(s.shelfColumns.map((c) => c.id.replace('col-', '')));
+      let letter = 'A';
+      for (let i = 0; i < 26; i++) {
+        const candidate = String.fromCharCode(65 + i);
+        if (!usedLetters.has(candidate)) {
+          letter = candidate;
+          break;
+        }
+      }
+      const maxOrder = s.shelfColumns.reduce((m, c) => Math.max(m, c.order), -1);
+      const color =
+        SHELF_COLOR_PALETTE[s.shelfColumns.length % SHELF_COLOR_PALETTE.length];
+      return {
+        ...s,
+        shelfColumns: [
+          ...s.shelfColumns,
+          { id: `col-${letter}`, label: `عمود ${letter}`, color, rows: 5, order: maxOrder + 1 },
+        ],
+      };
+    });
+  }, []);
+
+  const removeShelfColumn = useCallback((id) => {
+    setState((s) => ({
+      ...s,
+      shelfColumns: s.shelfColumns.filter((c) => c.id !== id),
+    }));
+  }, []);
+
+  // -----------------------------------------------------------------
+  // Custom needs list — free-form items (not tied to low-stock
+  // medicines), so the "needs" list can hold anything the pharmacy
+  // wants to track (supplies, special orders, etc.).
+  // -----------------------------------------------------------------
+  const addCustomNeed = useCallback((item) => {
+    setState((s) => ({
+      ...s,
+      customNeeds: [
+        { id: makeId('need'), title: '', qty: 1, note: '', done: false, ...item },
+        ...s.customNeeds,
+      ],
+    }));
+  }, []);
+
+  const updateCustomNeed = useCallback((id, patch) => {
+    setState((s) => ({
+      ...s,
+      customNeeds: s.customNeeds.map((n) => (n.id === id ? { ...n, ...patch } : n)),
+    }));
+  }, []);
+
+  const removeCustomNeed = useCallback((id) => {
+    setState((s) => ({ ...s, customNeeds: s.customNeeds.filter((n) => n.id !== id) }));
   }, []);
 
   // -----------------------------------------------------------------
@@ -431,6 +672,9 @@ export function useAstraStore() {
     addEmployee,
     updateEmployee,
     removeEmployee,
+    addEmployeeDocument,
+    updateEmployeeDocument,
+    removeEmployeeDocument,
     // distributors
     addDistributor,
     removeDistributor,
@@ -443,9 +687,50 @@ export function useAstraStore() {
     setNpsQty,
     markNpsOrdered,
     resetNps,
+    // custom needs list
+    addCustomNeed,
+    updateCustomNeed,
+    removeCustomNeed,
+    // shelf map columns
+    updateShelfColumn,
+    moveShelfColumn,
+    addShelfColumn,
+    removeShelfColumn,
+    // flash drive data store
+    flashStatus,
+    flashFolderName,
+    connectFlashDrive,
+    disconnectFlashDrive,
     // ui
     setHighlighterShelf,
     // reset
     resetAllData,
   };
 }
+
+// ---------------------------------------------------------------------
+// Shared Context — this is the fix for a real cross-page consistency
+// bug: previously every component called the state logic directly as a
+// bare hook, so each one got its OWN independent copy of the state
+// (only ever reconciled by re-reading localStorage on remount). Now a
+// single <AstraStoreProvider> (mounted once in App.jsx) computes the
+// state ONE time, and every component reads the *same* live object via
+// context — so a change made on one page (or in an always-mounted
+// component like TopNav) is instantly visible everywhere, with no
+// refresh or remount required.
+// ---------------------------------------------------------------------
+const AstraStoreContext = createContext(null);
+
+export function AstraStoreProvider({ children }) {
+  const value = useAstraStoreInternal();
+  return createElement(AstraStoreContext.Provider, { value }, children);
+}
+
+export function useAstraStore() {
+  const ctx = useContext(AstraStoreContext);
+  if (!ctx) {
+    throw new Error('useAstraStore() must be used inside <AstraStoreProvider>.');
+  }
+  return ctx;
+}
+
