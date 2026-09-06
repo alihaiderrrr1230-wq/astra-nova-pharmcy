@@ -151,7 +151,7 @@ export default function OmniSearch({ compact = false, wide = false }) {
                     )}
                   </div>
                   <div className="text-xs text-[var(--text-secondary)] truncate">
-                    {med.condition} • {med.form} • {med.dose} • رف {med.shelf}
+                    {med.condition} • {med.form} • {med.dose} • عمود {med.shelf}
                   </div>
                 </div>
                 <div className="text-xs text-[var(--text-secondary)] whitespace-nowrap">
