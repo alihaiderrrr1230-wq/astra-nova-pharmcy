@@ -8,21 +8,40 @@ import {
   Save,
   X,
   Search,
+  IdCard,
 } from 'lucide-react';
 import GlassCard from '../components/GlassCard.jsx';
 import { useAstraStore } from '../store/useAstraStore.js';
 import { formatIQD } from '../utils/format.js';
 
-const EMPTY_EMP = { name: '', role: 'صيدلي', salary: 0, hireDate: '', phone: '' };
+const EMPTY_EMP = {
+  name: '',
+  role: 'صيدلي',
+  salary: 0,
+  hireDate: '',
+  phone: '',
+  documents: [],
+};
 
 export default function MasterData() {
-  const { state, addEmployee, updateEmployee, removeEmployee, removeDistributor } =
-    useAstraStore();
+  const {
+    state,
+    addEmployee,
+    updateEmployee,
+    removeEmployee,
+    removeDistributor,
+    addEmployeeDocument,
+    updateEmployeeDocument,
+    removeEmployeeDocument,
+  } = useAstraStore();
   const [tab, setTab] = useState('employees'); // employees | distributors | receipts
   const [editingEmp, setEditingEmp] = useState(null);
   const [empForm, setEmpForm] = useState(EMPTY_EMP);
   const [empFeedback, setEmpFeedback] = useState('');
   const [receiptQuery, setReceiptQuery] = useState('');
+  const [docsEmpId, setDocsEmpId] = useState(null); // employee id whose documents modal is open
+  const [newDocLabel, setNewDocLabel] = useState('');
+  const [newDocValue, setNewDocValue] = useState('');
 
   function handleEmpSubmit(e) {
     e?.preventDefault?.();
@@ -236,6 +255,19 @@ export default function MasterData() {
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
+                            onClick={() => setDocsEmpId(e.id)}
+                            className="btn btn-ghost !p-1"
+                            title="المستمسكات"
+                          >
+                            <IdCard size={14} className="text-sky-600" />
+                            {(e.documents || []).length > 0 && (
+                              <span className="text-[10px] font-bold">
+                                {e.documents.length}
+                              </span>
+                            )}
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => handleEditEmp(e)}
                             className="btn btn-ghost !p-1"
                             title="تعديل"
@@ -366,6 +398,113 @@ export default function MasterData() {
             </table>
           </div>
         </GlassCard>
+      )}
+
+      {/* Employee documents modal — an unbounded, free-form list of
+          {label, value} entries (national ID number, address, anything
+          else the pharmacy needs to keep on file for that employee). */}
+      {docsEmpId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setDocsEmpId(null)}
+        >
+          <div
+            className="glass glass-strong p-5 w-full max-w-md max-h-[85vh] overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {(() => {
+              const emp = state.employees.find((e) => e.id === docsEmpId);
+              if (!emp) return null;
+              const docs = emp.documents || [];
+              return (
+                <>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-extrabold text-lg flex items-center gap-2">
+                      <IdCard size={18} className="text-sky-600" />
+                      مستمسكات {emp.name}
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setDocsEmpId(null)}
+                      className="p-1 rounded-full hover:bg-black/5"
+                      aria-label="إغلاق"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 mb-4">
+                    {docs.length === 0 ? (
+                      <p className="text-sm text-[var(--text-secondary)]">
+                        لا توجد مستمسكات مسجلة بعد لهذا الموظف.
+                      </p>
+                    ) : (
+                      docs.map((d) => (
+                        <div key={d.id} className="glass glass-xs p-2 flex items-center gap-2">
+                          <input
+                            type="text"
+                            className="input !py-1 !text-xs flex-1"
+                            placeholder="اسم المستمسك (رقم البطاقة الوطنية...)"
+                            value={d.label}
+                            onChange={(e) =>
+                              updateEmployeeDocument(emp.id, d.id, { label: e.target.value })
+                            }
+                          />
+                          <input
+                            type="text"
+                            className="input !py-1 !text-xs flex-1"
+                            placeholder="القيمة"
+                            value={d.value}
+                            onChange={(e) =>
+                              updateEmployeeDocument(emp.id, d.id, { value: e.target.value })
+                            }
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeEmployeeDocument(emp.id, d.id)}
+                            className="btn btn-ghost !p-1 text-rose-600"
+                            title="حذف"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-3 border-t border-[var(--glass-border)]">
+                    <input
+                      type="text"
+                      className="input !py-1.5 !text-xs flex-1"
+                      placeholder="اسم مستمسك جديد"
+                      value={newDocLabel}
+                      onChange={(e) => setNewDocLabel(e.target.value)}
+                    />
+                    <input
+                      type="text"
+                      className="input !py-1.5 !text-xs flex-1"
+                      placeholder="القيمة (اختياري)"
+                      value={newDocValue}
+                      onChange={(e) => setNewDocValue(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!newDocLabel.trim()) return;
+                        addEmployeeDocument(emp.id, newDocLabel.trim(), newDocValue.trim());
+                        setNewDocLabel('');
+                        setNewDocValue('');
+                      }}
+                      className="btn btn-primary !py-1.5"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
       )}
     </div>
   );
