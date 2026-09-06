@@ -8,6 +8,7 @@ import Inventory from './pages/Inventory.jsx';
 import ShelfMap from './pages/ShelfMap.jsx';
 import Admin from './pages/Admin.jsx';
 import Settings from './pages/Settings.jsx';
+import { useAstraStore } from './store/useAstraStore.js';
 
 // ---------------------------------------------------------------------
 // Top-level App
@@ -22,12 +23,13 @@ const PAGES = {
   home: { label: 'الرئيسية', component: Home, locked: false },
   pos: { label: 'الكاشير', component: POS, locked: false },
   inventory: { label: 'المخزن', component: Inventory, locked: false },
-  'shelf-map': { label: 'خريطة الأرفف', component: ShelfMap, locked: false },
+  'shelf-map': { label: 'خريطة الأعمدة', component: ShelfMap, locked: false },
   admin: { label: 'الإدارة', component: Admin, locked: true },
   settings: { label: 'الإعدادات', component: Settings, locked: false },
 };
 
 export default function App() {
+  const { state } = useAstraStore();
   const [activePage, setActivePage] = useState('home');
   // Admin auth now persists across page refreshes via localStorage, so
   // the user enters the PIN once and stays unlocked until they
@@ -135,7 +137,7 @@ export default function App() {
           className="text-center py-4 text-xs text-[var(--text-secondary)]"
           dir="rtl"
         >
-          صيدلية أسترا — جميع البيانات تُحفظ محلياً وتعمل دون اتصال
+          {state.settings.clinicName || 'صيدلية أسترا'} — جميع البيانات تُحفظ محلياً وتعمل دون اتصال
         </footer>
       </div>
 
