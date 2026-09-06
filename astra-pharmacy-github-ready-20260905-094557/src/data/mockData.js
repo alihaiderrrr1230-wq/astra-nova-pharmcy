@@ -3,6 +3,11 @@
 // Rich, complete, realistic data so the system feels alive on first load.
 // =====================================================================
 
+// Real-world Iraqi Dinar scale: raw authoring numbers (1.2, 800, 1200...)
+// are multiplied by this to become realistic IQD amounts across medicines,
+// salaries, expenses and debts.
+const IQD_SCALE = 1000;
+
 export const DEFAULT_PHRASES = [
   'الشفاء العاجل لكل مريض بإذن الله',
   'صحة أهلنا أمانة في أعناقنا',
@@ -80,57 +85,67 @@ export const DEFAULT_EMPLOYEES = [
     id: 'emp-1',
     name: 'د. أحمد الخالدي',
     role: 'صيدلي',
-    salary: 1200,
+    salary: 1200 * IQD_SCALE,
     hireDate: '2021-03-15',
     phone: '0791112233',
+    documents: [
+      { id: 'doc-1a', label: 'رقم البطاقة الوطنية', value: '' },
+      { id: 'doc-1b', label: 'عنوان السكن', value: '' },
+    ],
   },
   {
     id: 'emp-2',
     name: 'سارة المحمود',
     role: 'صيدلي مساعد',
-    salary: 800,
+    salary: 800 * IQD_SCALE,
     hireDate: '2022-07-01',
     phone: '0792223344',
+    documents: [],
   },
   {
     id: 'emp-3',
     name: 'محمد العتيبي',
     role: 'كاشير',
-    salary: 600,
+    salary: 600 * IQD_SCALE,
     hireDate: '2023-01-20',
     phone: '0793334455',
+    documents: [],
   },
   {
     id: 'emp-4',
     name: 'ليلى حسن',
     role: 'كاشير',
-    salary: 600,
+    salary: 600 * IQD_SCALE,
     hireDate: '2023-09-10',
     phone: '0794445566',
+    documents: [],
   },
   {
     id: 'emp-5',
     name: 'يوسف الناصر',
     role: 'مدير',
-    salary: 1800,
+    salary: 1800 * IQD_SCALE,
     hireDate: '2020-05-05',
     phone: '0795556677',
+    documents: [],
   },
   {
     id: 'emp-6',
     name: 'فاطمة الزهراء',
     role: 'عاملة نظافة',
-    salary: 400,
+    salary: 400 * IQD_SCALE,
     hireDate: '2024-02-12',
     phone: '0796667788',
+    documents: [],
   },
   {
     id: 'emp-7',
     name: 'كريم السيد',
     role: 'صيدلي مساعد',
-    salary: 750,
+    salary: 750 * IQD_SCALE,
     hireDate: '2024-06-18',
     phone: '0797778899',
+    documents: [],
   },
 ];
 
@@ -157,6 +172,16 @@ function makeBarcode(id) {
   const sum = digits.reduce((s, d, i) => s + d * (i % 2 === 0 ? 1 : 3), 0);
   const check = (10 - (sum % 10)) % 10;
   return `629${body}${check}`; // 629 = Jordan pharma prefix
+}
+
+// Real-world Iraqi Dinar prices: the raw numbers below (1.2, 7.0, ...)
+// are authoring-time "price weight" units. We scale them up to realistic
+// IQD amounts and round to the nearest 250 (IQD notes/coins are minted
+// in 250 steps), so every medicine shows a genuine market-style price
+// like "٢٬٠٠٠ د.ع" instead of a bare small number.
+function toRealisticIQD(n) {
+  const raw = Number(n) * IQD_SCALE;
+  return Math.round(raw / 250) * 250;
 }
 
 const med = (
@@ -186,8 +211,8 @@ const med = (
   dose,
   packSize,
   qty,
-  buyPrice,
-  sellPrice,
+  buyPrice: toRealisticIQD(buyPrice),
+  sellPrice: toRealisticIQD(sellPrice),
   condition,
   shelf,
   prescription,
@@ -351,81 +376,85 @@ function pick(arr) {
 }
 
 function makeReceipt(idSuffix, daysBack, patient, lines) {
-  const total = lines.reduce(
-    (s, l) => s + l.qty * l.unitPrice,
-    0
-  );
+  // `lines` only carries { medicineId, qty } — the real unit price is
+  // always looked up live from DEFAULT_MEDICINES, so seed receipts stay
+  // perfectly consistent with the (now realistic) IQD price list.
+  const resolvedLines = lines.map((l) => {
+    const m = DEFAULT_MEDICINES.find((med) => med.id === l.medicineId);
+    return {
+      medicineId: l.medicineId,
+      name: m?.tradeName ?? '—',
+      qty: l.qty,
+      unitPrice: m?.sellPrice ?? 0,
+    };
+  });
+  const total = resolvedLines.reduce((s, l) => s + l.qty * l.unitPrice, 0);
   return {
     id: `rcp-${idSuffix}`,
     timestamp: daysAgo(daysBack),
     patient,
-    lines: lines.map((l) => ({
-      medicineId: l.medicineId,
-      name: DEFAULT_MEDICINES.find((m) => m.id === l.medicineId).tradeName,
-      qty: l.qty,
-      unitPrice: l.unitPrice,
-    })),
+    lines: resolvedLines,
     total: Number(total.toFixed(2)),
   };
 }
 
 export const DEFAULT_RECEIPTS = [
   makeReceipt('0001', 0, 'محمد العلي', [
-    { medicineId: 'm-001', qty: 2, unitPrice: 2.0 },
-    { medicineId: 'm-026', qty: 1, unitPrice: 1.8 },
+    { medicineId: 'm-001', qty: 2 },
+    { medicineId: 'm-026', qty: 1 },
   ]),
   makeReceipt('0002', 0, 'سارة الخالد', [
-    { medicineId: 'm-006', qty: 1, unitPrice: 7.0 },
-    { medicineId: 'm-046', qty: 1, unitPrice: 3.0 },
+    { medicineId: 'm-006', qty: 1 },
+    { medicineId: 'm-046', qty: 1 },
   ]),
   makeReceipt('0003', 1, 'أحمد الرشيد', [
-    { medicineId: 'm-011', qty: 1, unitPrice: 4.0 },
-    { medicineId: 'm-016', qty: 1, unitPrice: 3.5 },
+    { medicineId: 'm-011', qty: 1 },
+    { medicineId: 'm-016', qty: 1 },
   ]),
   makeReceipt('0004', 2, 'نور الدين', [
-    { medicineId: 'm-021', qty: 1, unitPrice: 8.5 },
-    { medicineId: 'm-041', qty: 1, unitPrice: 5.0 },
+    { medicineId: 'm-021', qty: 1 },
+    { medicineId: 'm-041', qty: 1 },
   ]),
   makeReceipt('0005', 3, 'هند الزهراني', [
-    { medicineId: 'm-056', qty: 1, unitPrice: 6.5 },
-    { medicineId: 'm-031', qty: 1, unitPrice: 9.0 },
+    { medicineId: 'm-056', qty: 1 },
+    { medicineId: 'm-031', qty: 1 },
   ]),
   makeReceipt('0006', 5, 'عمر الفهد', [
-    { medicineId: 'm-003', qty: 2, unitPrice: 1.8 },
-    { medicineId: 'm-029', qty: 1, unitPrice: 3.0 },
+    { medicineId: 'm-003', qty: 2 },
+    { medicineId: 'm-029', qty: 1 },
   ]),
   makeReceipt('0007', 7, 'مريم السيد', [
-    { medicineId: 'm-013', qty: 1, unitPrice: 2.8 },
-    { medicineId: 'm-018', qty: 1, unitPrice: 6.5 },
+    { medicineId: 'm-013', qty: 1 },
+    { medicineId: 'm-018', qty: 1 },
   ]),
   makeReceipt('0008', 9, 'يوسف العامري', [
-    { medicineId: 'm-036', qty: 1, unitPrice: 4.2 },
-    { medicineId: 'm-053', qty: 1, unitPrice: 3.2 },
+    { medicineId: 'm-036', qty: 1 },
+    { medicineId: 'm-053', qty: 1 },
   ]),
   makeReceipt('0009', 12, 'لميا الحلبي', [
-    { medicineId: 'm-009', qty: 1, unitPrice: 8.5 },
-    { medicineId: 'm-027', qty: 1, unitPrice: 2.0 },
+    { medicineId: 'm-009', qty: 1 },
+    { medicineId: 'm-027', qty: 1 },
   ]),
   makeReceipt('0010', 15, 'خالد الحمد', [
-    { medicineId: 'm-046', qty: 1, unitPrice: 3.0 },
-    { medicineId: 'm-050', qty: 1, unitPrice: 4.8 },
-    { medicineId: 'm-031', qty: 1, unitPrice: 9.0 },
+    { medicineId: 'm-046', qty: 1 },
+    { medicineId: 'm-050', qty: 1 },
+    { medicineId: 'm-031', qty: 1 },
   ]),
   makeReceipt('0011', 18, 'دينا الشامي', [
-    { medicineId: 'm-012', qty: 1, unitPrice: 5.0 },
-    { medicineId: 'm-024', qty: 1, unitPrice: 3.5 },
+    { medicineId: 'm-012', qty: 1 },
+    { medicineId: 'm-024', qty: 1 },
   ]),
   makeReceipt('0012', 22, 'حسن النجار', [
-    { medicineId: 'm-002', qty: 2, unitPrice: 2.2 },
-    { medicineId: 'm-033', qty: 1, unitPrice: 3.5 },
+    { medicineId: 'm-002', qty: 2 },
+    { medicineId: 'm-033', qty: 1 },
   ]),
   makeReceipt('0013', 25, 'رهام العبدالله', [
-    { medicineId: 'm-043', qty: 1, unitPrice: 9.5 },
-    { medicineId: 'm-042', qty: 1, unitPrice: 8.0 },
+    { medicineId: 'm-043', qty: 1 },
+    { medicineId: 'm-042', qty: 1 },
   ]),
   makeReceipt('0014', 28, 'سامي الكيلاني', [
-    { medicineId: 'm-038', qty: 1, unitPrice: 5.0 },
-    { medicineId: 'm-007', qty: 1, unitPrice: 3.5 },
+    { medicineId: 'm-038', qty: 1 },
+    { medicineId: 'm-007', qty: 1 },
   ]),
 ];
 
@@ -433,19 +462,19 @@ export const DEFAULT_RECEIPTS = [
 // Expenses (so the finance engine has cost data to work against)
 // ---------------------------------------------------------------------
 export const DEFAULT_EXPENSES = [
-  { id: 'exp-1', label: 'فاتورة كهرباء شهرية', amount: 250, date: daysAgo(3), category: 'مرافق' },
-  { id: 'exp-2', label: 'إيجار الصيدلية', amount: 1200, date: daysAgo(5), category: 'إيجار' },
-  { id: 'exp-3', label: 'مستلزمات تنظيف', amount: 80, date: daysAgo(8), category: 'مستلزمات' },
-  { id: 'exp-4', label: 'هالك وتالف', amount: 120, date: daysAgo(11), category: 'هالك' },
-  { id: 'exp-5', label: 'صيانة ثلاجة العرض', amount: 150, date: daysAgo(15), category: 'صيانة' },
+  { id: 'exp-1', label: 'فاتورة كهرباء شهرية', amount: 250 * IQD_SCALE, date: daysAgo(3), category: 'مرافق' },
+  { id: 'exp-2', label: 'إيجار الصيدلية', amount: 1200 * IQD_SCALE, date: daysAgo(5), category: 'إيجار' },
+  { id: 'exp-3', label: 'مستلزمات تنظيف', amount: 80 * IQD_SCALE, date: daysAgo(8), category: 'مستلزمات' },
+  { id: 'exp-4', label: 'هالك وتالف', amount: 120 * IQD_SCALE, date: daysAgo(11), category: 'هالك' },
+  { id: 'exp-5', label: 'صيانة ثلاجة العرض', amount: 150 * IQD_SCALE, date: daysAgo(15), category: 'صيانة' },
 ];
 
 // ---------------------------------------------------------------------
 // Distributor debts
 // ---------------------------------------------------------------------
 export const DEFAULT_DEBTS = [
-  { id: 'dbt-1', distributorId: 'dst-1', label: 'فاتورة شهرية 08/2026', amount: 3400, date: daysAgo(6) },
-  { id: 'dbt-2', distributorId: 'dst-4', label: 'طلب أدوية 08/2026', amount: 2100, date: daysAgo(12) },
+  { id: 'dbt-1', distributorId: 'dst-1', label: 'فاتورة شهرية 08/2026', amount: 3400 * IQD_SCALE, date: daysAgo(6) },
+  { id: 'dbt-2', distributorId: 'dst-4', label: 'طلب أدوية 08/2026', amount: 2100 * IQD_SCALE, date: daysAgo(12) },
 ];
 
 // ---------------------------------------------------------------------
@@ -471,10 +500,44 @@ export const DEFAULT_SALES_LOG = DEFAULT_RECEIPTS.flatMap((r) =>
 export const DEFAULT_SETTINGS = {
   theme: 'light', // 'light' | 'dark'
   language: 'ar', // 'ar' | 'en'
-  shelfColumns: 5, // A..E
-  shelfRows: 5, // shelves per column
   pin: '1234', // default 4-digit PIN, changeable in Settings
+  hasPinSet: true, // true once a real PIN exists — gates PinPad's set/enter mode
   reducedMotion: false, // respect prefers-reduced-motion automatically
+
+  // Facility identity — shown on the Home welcome card instead of a
+  // fixed name/icon. Editable from Settings.
+  clinicName: 'صيدلية أسترا',
+  managerName: '',
+
+  // Currency: all prices are entered/stored in IQD (base currency).
+  // exchangeRate = how many IQD equal 1 USD, used to derive the USD
+  // display value everywhere a price is shown.
+  baseCurrency: 'IQD',
+  exchangeRate: 1310,
 };
+
+// ---------------------------------------------------------------------
+// Shelf map (columns) customization — lives in its own top-level state
+// slice (not `settings`) since it's edited from a dedicated panel on
+// the Shelf Map page itself, not from Settings.
+// Each column: { id, label, color } — color is one of SHELF_COLOR_PALETTE.
+// ---------------------------------------------------------------------
+export const SHELF_COLOR_PALETTE = [
+  '#0B3D91', // deep royal blue
+  '#7C3AED', // amethyst purple
+  '#0F766E', // deep teal
+  '#B45309', // antique amber
+  '#9D174D', // deep rose
+  '#374151', // charcoal slate
+  '#065F46', // emerald green
+];
+
+export const DEFAULT_SHELF_COLUMNS = ['A', 'B', 'C', 'D', 'E'].map((letter, i) => ({
+  id: `col-${letter}`,
+  label: `عمود ${letter}`,
+  color: SHELF_COLOR_PALETTE[i % SHELF_COLOR_PALETTE.length],
+  rows: 5,
+  order: i,
+}));
 
 export const STORAGE_KEY = 'astra-pharmacy-state-v1';
