@@ -22,7 +22,7 @@ const NAV = [
   { id: 'home', label: 'الرئيسية', icon: Home, locked: false },
   { id: 'pos', label: 'الكاشير', icon: ShoppingCart, locked: false },
   { id: 'inventory', label: 'المخزن', icon: Package, locked: false },
-  { id: 'shelf-map', label: 'خريطة الأرفف', icon: Grid3x3, locked: false },
+  { id: 'shelf-map', label: 'خريطة الأعمدة', icon: Grid3x3, locked: false },
   { id: 'admin', label: 'الإدارة', icon: Wallet, locked: true },
   { id: 'settings', label: 'الإعدادات', icon: SettingsIcon, locked: false },
 ];
@@ -62,7 +62,7 @@ export default function TopNav({
           <div className="leading-tight text-start hidden sm:block">
             <div className="font-extrabold text-lg">ASTRA</div>
             <div className="text-[10px] text-[var(--text-secondary)] -mt-1">
-              صيدلية أسترا
+              {state.settings.clinicName || 'صيدلية أسترا'}
             </div>
           </div>
         </button>
