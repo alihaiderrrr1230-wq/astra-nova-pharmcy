@@ -14,7 +14,7 @@ import {
 import GlassCard from '../components/GlassCard.jsx';
 import BarcodeModal from '../components/BarcodeModal.jsx';
 import { useAstraStore } from '../store/useAstraStore.js';
-import { formatIQD } from '../utils/format.js';
+import { formatIQD, formatUSD } from '../utils/format.js';
 
 export default function POS() {
   const {
@@ -162,7 +162,7 @@ export default function POS() {
 </style>
 </head>
 <body>
-  <h1>صيدلية أسترا</h1>
+  <h1>${state.settings.clinicName || 'صيدلية أسترا'}</h1>
   <div class="meta">فاتورة ${r.id} • ${new Date(r.timestamp).toLocaleString('ar-EG')}</div>
   <div style="font-size:12px;margin-bottom:8px">المريض: <b>${r.patient}</b></div>
   <table>
@@ -172,7 +172,7 @@ export default function POS() {
   <div class="totals">
     <div><span>عدد الأصناف</span><span>${r.lines.length}</span></div>
     <div><span>إجمالي الوحدات</span><span>${r.lines.reduce((s, l) => s + l.qty, 0)}</span></div>
-    <div class="grand"><span>الإجمالي</span><span>${formatIQD(r.total)}</span></div>
+    <div class="grand"><span>الإجمالي</span><span>${formatIQD(r.total)} (${formatUSD(r.total, state.settings.exchangeRate)})</span></div>
   </div>
   <p style="text-align:center;margin-top:18px;font-size:12px;color:#5b6b85">
     شكراً لزيارتكم — صحة أهلنا أمانة في أعناقنا
@@ -264,7 +264,7 @@ export default function POS() {
                         <td>
                           <div className="font-semibold">{l.med.tradeName}</div>
                           <div className="text-xs text-[var(--text-secondary)]">
-                            {l.med.condition} • {l.med.form} • {l.med.dose} • رف {l.med.shelf}
+                            {l.med.condition} • {l.med.form} • {l.med.dose} • عمود {l.med.shelf}
                             {isRx && (
                               <span className="chip chip-coral ms-2 !py-0">
                                 Rx
@@ -349,7 +349,12 @@ export default function POS() {
                 </div>
                 <div className="flex items-center justify-between text-lg font-extrabold mt-2 pt-2 border-t border-[var(--glass-border)]">
                   <span>الإجمالي</span>
-                  <span>{formatIQD(total)}</span>
+                  <div className="text-end">
+                    <div>{formatIQD(total)}</div>
+                    <div className="text-xs font-medium text-[var(--text-secondary)]">
+                      {formatUSD(total, state.settings.exchangeRate)}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
