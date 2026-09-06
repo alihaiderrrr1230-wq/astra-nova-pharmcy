@@ -10,9 +10,13 @@ import {
   X,
   LogOut,
   RotateCcw,
-  Grid3x3,
   MessageSquare,
   LogIn,
+  Building2,
+  DollarSign,
+  UsbIcon,
+  CheckCircle2,
+  Link2Off,
 } from 'lucide-react';
 import GlassCard from '../components/GlassCard.jsx';
 import { useAstraStore } from '../store/useAstraStore.js';
@@ -23,10 +27,24 @@ import { useAstraStore } from '../store/useAstraStore.js';
 // itself was moved to the Admin page (tab 5) per the redesign notes.
 // ---------------------------------------------------------------------
 export default function Settings({ isAdminAuth, onExitAdmin, onRequireUnlock }) {
-  const { state, setSettings, addPhrase, updatePhrase, removePhrase, resetAllData } =
-    useAstraStore();
+  const {
+    state,
+    setSettings,
+    addPhrase,
+    updatePhrase,
+    removePhrase,
+    resetAllData,
+    flashStatus,
+    flashFolderName,
+    connectFlashDrive,
+    disconnectFlashDrive,
+  } = useAstraStore();
+  const [flashError, setFlashError] = useState('');
 
-  const { theme, shelfColumns, shelfRows } = state.settings;
+  const { theme, clinicName, managerName, exchangeRate } = state.settings;
+  const [clinicNameDraft, setClinicNameDraft] = useState(clinicName || '');
+  const [managerNameDraft, setManagerNameDraft] = useState(managerName || '');
+  const [exchangeRateDraft, setExchangeRateDraft] = useState(exchangeRate || 1310);
   const [newPhrase, setNewPhrase] = useState('');
   const [editingPhraseIdx, setEditingPhraseIdx] = useState(null);
   const [editingPhraseText, setEditingPhraseText] = useState('');
@@ -109,77 +127,160 @@ export default function Settings({ isAdminAuth, onExitAdmin, onRequireUnlock }) 
           </div>
         </GlassCard>
 
-        {/* Shelf map dimensions */}
+        {/* Facility identity */}
         <GlassCard className="p-5" strong>
           <h2 className="text-lg font-extrabold mb-3 flex items-center gap-2">
-            <Grid3x3 size={18} />
-            أبعاد خريطة الأرفف
+            <Building2 size={18} />
+            هوية المنشأة
           </h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-3">
             <div>
               <div className="text-sm text-[var(--text-secondary)] mb-1">
-                عدد الأعمدة
+                اسم الصيدلية / العيادة
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={clinicNameDraft}
+                  onChange={(e) => setClinicNameDraft(e.target.value)}
+                  className="input flex-1"
+                  placeholder="مثال: صيدلية النور"
+                />
                 <button
                   type="button"
-                  onClick={() =>
-                    setSettings({ shelfColumns: Math.max(2, shelfColumns - 1) })
-                  }
-                  className="btn"
+                  onClick={() => setSettings({ clinicName: clinicNameDraft.trim() })}
+                  className="btn btn-primary"
                 >
-                  −
-                </button>
-                <span className="font-extrabold text-lg w-10 text-center">
-                  {shelfColumns}
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSettings({ shelfColumns: Math.min(10, shelfColumns + 1) })
-                  }
-                  className="btn"
-                >
-                  +
+                  <Save size={14} />
                 </button>
               </div>
             </div>
             <div>
               <div className="text-sm text-[var(--text-secondary)] mb-1">
-                عدد الصفوف
+                اسم المدير / المسؤول
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={managerNameDraft}
+                  onChange={(e) => setManagerNameDraft(e.target.value)}
+                  className="input flex-1"
+                  placeholder="مثال: د. علي حيدر"
+                />
                 <button
                   type="button"
-                  onClick={() =>
-                    setSettings({ shelfRows: Math.max(2, shelfRows - 1) })
-                  }
-                  className="btn"
+                  onClick={() => setSettings({ managerName: managerNameDraft.trim() })}
+                  className="btn btn-primary"
                 >
-                  −
-                </button>
-                <span className="font-extrabold text-lg w-10 text-center">
-                  {shelfRows}
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSettings({ shelfRows: Math.min(10, shelfRows + 1) })
-                  }
-                  className="btn"
-                >
-                  +
+                  <Save size={14} />
                 </button>
               </div>
             </div>
           </div>
-          <p className="text-xs text-[var(--text-secondary)] mt-2">
-            تنعكس التغييرات فوراً على خريطة الأرفف.
-          </p>
+        </GlassCard>
+
+        {/* Currency */}
+        <GlassCard className="p-5" strong>
+          <h2 className="text-lg font-extrabold mb-3 flex items-center gap-2">
+            <DollarSign size={18} />
+            العملة وسعر الصرف
+          </h2>
+          <div className="space-y-3">
+            <p className="text-xs text-[var(--text-secondary)]">
+              كل الأسعار تُدخل وتُحفظ بالدينار العراقي (د.ع)، وتُحسب مقابلها
+              بالدولار الأمريكي ($) تلقائياً حسب سعر الصرف أدناه.
+            </p>
+            <div>
+              <div className="text-sm text-[var(--text-secondary)] mb-1">
+                سعر الصرف (كم دينار يساوي 1 دولار)
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  value={exchangeRateDraft}
+                  onChange={(e) => setExchangeRateDraft(Number(e.target.value) || 0)}
+                  className="input flex-1"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSettings({ exchangeRate: Math.max(1, exchangeRateDraft) })
+                  }
+                  className="btn btn-primary"
+                >
+                  <Save size={14} />
+                </button>
+              </div>
+              <p className="text-xs text-[var(--text-secondary)] mt-1">
+                السعر الحالي: 1$ = {exchangeRate?.toLocaleString('ar-IQ')} د.ع
+              </p>
+            </div>
+          </div>
+        </GlassCard>
+
+        {/* Flash-drive data store */}
+        <GlassCard className="p-5" strong>
+          <h2 className="text-lg font-extrabold mb-3 flex items-center gap-2">
+            <UsbIcon size={18} />
+            الفلاش كمخزن بيانات
+          </h2>
+
+          {flashStatus === 'unsupported' && (
+            <p className="text-sm text-amber-600">
+              هذا المتصفح لا يدعم الوصول المباشر للفلاش. استخدم Chrome أو
+              Edge لتفعيل هذي الميزة.
+            </p>
+          )}
+
+          {flashStatus !== 'unsupported' && (
+            <>
+              <p className="text-xs text-[var(--text-secondary)] mb-3">
+                اربط مجلداً على الفلاش ميموري ليصير هو مخزن بيانات هذا
+                الجهاز — كل التغييرات تُحفظ عليه مباشرة، بدون حاجة لأي
+                سيرفر. اسحب نفس الفلاش لأي جهاز ثاني وبياناتك توصل وياها.
+              </p>
+
+              {flashStatus === 'connected' ? (
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="flex items-center gap-2 text-sm font-semibold text-emerald-600">
+                    <CheckCircle2 size={16} />
+                    متصل بمجلد: {flashFolderName}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={disconnectFlashDrive}
+                    className="btn !text-xs !py-1.5"
+                  >
+                    <Link2Off size={14} />
+                    فصل الاتصال
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setFlashError('');
+                      const res = await connectFlashDrive();
+                      if (!res.ok) setFlashError(res.error);
+                    }}
+                    disabled={flashStatus === 'connecting'}
+                    className="btn btn-primary w-full flex items-center justify-center gap-2 !py-2"
+                  >
+                    <UsbIcon size={16} />
+                    {flashStatus === 'connecting' ? 'جارٍ الاتصال…' : 'ربط مجلد على الفلاش'}
+                  </button>
+                  {flashError && (
+                    <p className="text-xs text-rose-600">{flashError}</p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </GlassCard>
       </div>
 
-      {/* Phrase manager */}
       <GlassCard className="p-5">
         <h2 className="text-lg font-extrabold mb-3 flex items-center gap-2">
           <MessageSquare size={18} />
