@@ -120,7 +120,7 @@ export default function LoopScreen() {
                     </span>
                   </div>
                   <div className="text-xs text-[var(--text-secondary)]">
-                    {e.med.form} • {e.med.dose} • رف {e.med.shelf}
+                    {e.med.form} • {e.med.dose} • عمود {e.med.shelf}
                   </div>
                 </div>
               ))}
@@ -165,7 +165,7 @@ export default function LoopScreen() {
 
       {/* Shelf map */}
       <GlassCard className="p-5">
-        <h2 className="text-lg font-extrabold mb-3">خريطة الأرفف</h2>
+        <h2 className="text-lg font-extrabold mb-3">خريطة الأعمدة</h2>
         <ShelfMap />
       </GlassCard>
     </div>
