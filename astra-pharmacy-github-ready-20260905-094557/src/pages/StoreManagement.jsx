@@ -21,7 +21,7 @@ import {
   WAREHOUSES_LIST,
   SALES_REPS_LIST,
 } from '../data/mockData.js';
-import { formatIQD, formatDate } from '../utils/format.js';
+import { formatIQD, formatDate, formatUSD } from '../utils/format.js';
 
 const EMPTY_FORM = {
   barcode: '',
@@ -47,6 +47,13 @@ export default function StoreManagement() {
     addMedicine,
     updateMedicine,
     deleteMedicine,
+    nps,
+    setNpsQty,
+    markNpsOrdered,
+    resetNps,
+    addCustomNeed,
+    updateCustomNeed,
+    removeCustomNeed,
   } = useAstraStore();
 
   const [form, setForm] = useState(EMPTY_FORM);
@@ -103,8 +110,10 @@ export default function StoreManagement() {
   // Each medicine in the needs list has editable qty (via setNpsQty) and
   // an "ordered" flag (via markNpsOrdered). The state is keyed by
   // medicineId and stored in its own localStorage key.
-  const { nps, setNpsQty, markNpsOrdered, resetNps } = useAstraStore();
   const [showOrdered, setShowOrdered] = useState(false);
+  const [newNeedTitle, setNewNeedTitle] = useState('');
+  const [newNeedQty, setNewNeedQty] = useState(1);
+  const [newNeedNote, setNewNeedNote] = useState('');
 
   const needsList = useMemo(() => {
     return state.medicines
@@ -158,7 +167,7 @@ export default function StoreManagement() {
 </style>
 </head>
 <body>
-  <h1>قائمة الاحتياجات — صيدلية أسترا</h1>
+  <h1>قائمة الاحتياجات — ${state.settings.clinicName || 'صيدلية أسترا'}</h1>
   <div class="meta">NPS — تاريخ الإصدار: ${new Date().toLocaleDateString('ar-EG')}</div>
   <table>
     <thead>
@@ -329,7 +338,7 @@ export default function StoreManagement() {
             </div>
             <div>
               <label className="text-xs text-[var(--text-secondary)] mb-1 block">
-                سعر الشراء
+                سعر الشراء (د.ع)
               </label>
               <input
                 type="number"
@@ -341,10 +350,13 @@ export default function StoreManagement() {
                   setField('buyPrice', Math.max(0, Number(e.target.value)))
                 }
               />
+              <div className="text-[10px] text-[var(--text-secondary)] mt-0.5">
+                {formatUSD(form.buyPrice, state.settings.exchangeRate)}
+              </div>
             </div>
             <div>
               <label className="text-xs text-[var(--text-secondary)] mb-1 block">
-                سعر البيع
+                سعر البيع (د.ع)
               </label>
               <input
                 type="number"
@@ -356,6 +368,9 @@ export default function StoreManagement() {
                   setField('sellPrice', Math.max(0, Number(e.target.value)))
                 }
               />
+              <div className="text-[10px] text-[var(--text-secondary)] mt-0.5">
+                {formatUSD(form.sellPrice, state.settings.exchangeRate)}
+              </div>
             </div>
             <div>
               <label className="text-xs text-[var(--text-secondary)] mb-1 block">
@@ -369,7 +384,7 @@ export default function StoreManagement() {
             </div>
             <div>
               <label className="text-xs text-[var(--text-secondary)] mb-1 block">
-                موقع الرف
+                موقع العمود
               </label>
               <input
                 className="input"
@@ -615,6 +630,103 @@ export default function StoreManagement() {
               </div>
             </div>
           )}
+
+          {/* ---- Custom needs — free-form, manual list, any purpose ---- */}
+          <div className="mt-5 pt-4 border-t border-[var(--glass-border)]">
+            <h3 className="text-sm font-extrabold mb-2 flex items-center gap-2">
+              احتياجات إضافية (يدوية)
+            </h3>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newNeedTitle.trim()) return;
+                addCustomNeed({
+                  title: newNeedTitle.trim(),
+                  qty: newNeedQty,
+                  note: newNeedNote.trim(),
+                });
+                setNewNeedTitle('');
+                setNewNeedQty(1);
+                setNewNeedNote('');
+              }}
+              className="flex flex-wrap gap-2 mb-3"
+            >
+              <input
+                type="text"
+                className="input flex-1 min-w-[140px] !py-1.5"
+                placeholder="اسم الاحتياج (مستلزم، طلب خاص...)"
+                value={newNeedTitle}
+                onChange={(e) => setNewNeedTitle(e.target.value)}
+              />
+              <input
+                type="number"
+                min={1}
+                className="input w-20 !py-1.5 text-center"
+                value={newNeedQty}
+                onChange={(e) => setNewNeedQty(Math.max(1, Number(e.target.value) || 1))}
+              />
+              <input
+                type="text"
+                className="input flex-1 min-w-[120px] !py-1.5"
+                placeholder="ملاحظة (اختياري)"
+                value={newNeedNote}
+                onChange={(e) => setNewNeedNote(e.target.value)}
+              />
+              <button type="submit" className="btn btn-primary !py-1.5">
+                <Plus size={14} />
+                إضافة
+              </button>
+            </form>
+
+            {state.customNeeds.length === 0 ? (
+              <p className="text-xs text-[var(--text-secondary)]">
+                لا توجد احتياجات إضافية مضافة يدوياً.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {state.customNeeds.map((n) => (
+                  <div
+                    key={n.id}
+                    className={`glass glass-xs p-2 flex items-center gap-2 ${
+                      n.done ? 'opacity-60' : ''
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!!n.done}
+                      onChange={(e) => updateCustomNeed(n.id, { done: e.target.checked })}
+                      className="w-4 h-4"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div
+                        className={`text-sm font-semibold truncate ${
+                          n.done ? 'line-through' : ''
+                        }`}
+                      >
+                        {n.title}{' '}
+                        <span className="text-[11px] text-[var(--text-secondary)]">
+                          ×{n.qty}
+                        </span>
+                      </div>
+                      {n.note && (
+                        <div className="text-[11px] text-[var(--text-secondary)] truncate">
+                          {n.note}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeCustomNeed(n.id)}
+                      className="btn btn-ghost !p-1 text-rose-600"
+                      title="حذف"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </GlassCard>
       </div>
 
@@ -635,7 +747,7 @@ export default function StoreManagement() {
                 <th>الشكل / الجرعة</th>
                 <th>الكمية</th>
                 <th>سعر البيع</th>
-                <th>الرف</th>
+                <th>العمود</th>
                 <th>الإجراءات</th>
               </tr>
             </thead>
@@ -665,7 +777,12 @@ export default function StoreManagement() {
                       {m.qty}
                     </span>
                   </td>
-                  <td>{formatIQD(m.sellPrice)}</td>
+                  <td>
+                    {formatIQD(m.sellPrice)}
+                    <div className="text-[10px] text-[var(--text-secondary)]">
+                      {formatUSD(m.sellPrice, state.settings.exchangeRate)}
+                    </div>
+                  </td>
                   <td>{m.shelf}</td>
                   <td>
                     <div className="flex items-center gap-1">
