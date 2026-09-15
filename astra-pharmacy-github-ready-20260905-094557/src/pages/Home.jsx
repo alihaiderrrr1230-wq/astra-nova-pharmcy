@@ -1,8 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Sparkles, TrendingUp, Stethoscope, Pencil, Save } from 'lucide-react';
+import {
+  Sparkles,
+  TrendingUp,
+  Stethoscope,
+  Pencil,
+  Save,
+  AlertTriangle,
+  ArrowUpRight,
+} from 'lucide-react';
 import GlassCard from '../components/GlassCard.jsx';
 import OmniSearch from '../components/OmniSearch.jsx';
 import { useAstraStore } from '../store/useAstraStore.js';
+import { REORDER_THRESHOLD } from '../data/mockData.js';
 
 // ---------------------------------------------------------------------
 // Home — simplified, redesigned:
@@ -65,6 +74,28 @@ export default function Home() {
     }, 8000);
     return () => clearInterval(i);
   }, [state.phrases.length]);
+
+  // Business visibility — low stock + expiry warnings. Moved here from
+  // Admin so the whole team sees it at a glance, no PIN needed.
+  const lowStock = useMemo(
+    () =>
+      state.medicines
+        .filter((m) => m.qty <= REORDER_THRESHOLD)
+        .sort((a, b) => a.qty - b.qty),
+    [state.medicines]
+  );
+
+  const expiringSoon = useMemo(() => {
+    const now = new Date();
+    const horizon = new Date();
+    horizon.setMonth(horizon.getMonth() + 6);
+    return state.medicines
+      .filter((m) => {
+        const exp = new Date(m.expiryDate);
+        return exp <= horizon && exp >= now;
+      })
+      .sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
+  }, [state.medicines]);
 
   // Facility identity — editable directly from the welcome card.
   const [editingIdentity, setEditingIdentity] = useState(false);
@@ -251,6 +282,107 @@ export default function Home() {
               />
             ))}
           </div>
+        </GlassCard>
+      </div>
+
+      {/* 4) Business visibility — moved here from Admin */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <GlassCard className="p-5" strong>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-extrabold flex items-center gap-2">
+              <AlertTriangle size={18} className="text-amber-600" />
+              تنبيهات نقص المخزون
+            </h2>
+            <span className="chip chip-coral">{lowStock.length}</span>
+          </div>
+          {lowStock.length === 0 ? (
+            <p className="text-sm text-[var(--text-secondary)]">
+              ممتاز! لا توجد أصناف منخفضة حالياً.
+            </p>
+          ) : (
+            <div className="glass-table-wrap" style={{ maxHeight: '60vh' }}>
+              <table className="glass-table">
+                <thead>
+                  <tr>
+                    <th>الصنف</th>
+                    <th>الكمية</th>
+                    <th>العمود</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lowStock.map((m) => (
+                    <tr key={m.id}>
+                      <td>
+                        <div className="font-semibold">{m.tradeName}</div>
+                        <div className="text-xs text-[var(--text-secondary)]">
+                          {m.condition}
+                        </div>
+                      </td>
+                      <td>
+                        <span
+                          className={`font-extrabold ${
+                            m.qty === 0 ? 'text-red-500' : 'text-amber-600'
+                          }`}
+                        >
+                          {m.qty}
+                        </span>
+                      </td>
+                      <td className="text-sm">{m.shelf}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </GlassCard>
+
+        <GlassCard className="p-5" strong>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-extrabold flex items-center gap-2">
+              <ArrowUpRight size={18} className="text-violet-600" />
+              أدوية قاربت صلاحيتها على الانتهاء
+            </h2>
+            <span className="chip chip-violet">{expiringSoon.length}</span>
+          </div>
+          {expiringSoon.length === 0 ? (
+            <p className="text-sm text-[var(--text-secondary)]">
+              لا توجد صلاحية قاربت خلال 6 أشهر.
+            </p>
+          ) : (
+            <div className="glass-table-wrap" style={{ maxHeight: '60vh' }}>
+              <table className="glass-table">
+                <thead>
+                  <tr>
+                    <th>الصنف</th>
+                    <th>الصلاحية</th>
+                    <th>متبقي</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {expiringSoon.map((m) => (
+                    <tr key={m.id}>
+                      <td>
+                        <div className="font-semibold">{m.tradeName}</div>
+                        <div className="text-xs text-[var(--text-secondary)]">
+                          {m.condition}
+                        </div>
+                      </td>
+                      <td className="text-sm">
+                        {new Date(m.expiryDate).toLocaleDateString('ar-EG')}
+                      </td>
+                      <td className="text-sm">
+                        {Math.ceil(
+                          (new Date(m.expiryDate) - new Date()) /
+                            (1000 * 60 * 60 * 24 * 30)
+                        )}{' '}
+                        شهراً
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </GlassCard>
       </div>
     </div>
