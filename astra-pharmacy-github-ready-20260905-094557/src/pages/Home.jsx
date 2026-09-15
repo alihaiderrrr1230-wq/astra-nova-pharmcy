@@ -162,7 +162,7 @@ export default function Home() {
       <div className="w-full">
         <div
           className="glass glass-sm p-2"
-          style={{ borderRadius: 999 }}
+          style={{ borderRadius: 999, overflow: 'visible' }}
         >
           <OmniSearch wide />
         </div>
