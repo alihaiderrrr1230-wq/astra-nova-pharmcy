@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { useAstraStore } from '../store/useAstraStore.js';
+import GlassCard from './GlassCard.jsx';
 
 // ---------------------------------------------------------------------
 // ShelfMap — visual layout of the pharmacy's "columns" (formerly called
@@ -102,29 +103,40 @@ export default function ShelfMap({ highlight }) {
         </p>
       )}
 
-      {/* Cell detail modal — lists every medicine sharing this position */}
+      {/* Cell detail modal — lists every medicine sharing this position.
+          Same visual pattern as PinPad: blurred dark backdrop + a real
+          GlassCard, so it feels consistent with the rest of the app
+          instead of a plain floating white box. */}
       {openCell && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
           onClick={() => setOpenCell(null)}
         >
           <div
-            className="glass glass-strong p-5 w-full max-w-sm max-h-[80vh] overflow-auto"
+            className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+            aria-hidden="true"
+          />
+          <GlassCard
+            strong
+            className="relative max-w-sm w-full max-h-[80vh] overflow-auto p-6"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-extrabold text-lg">
-                {openCell.col.label} — صف {openCell.row}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setOpenCell(null)}
-                className="p-1 rounded-full hover:bg-black/5"
-                aria-label="إغلاق"
-              >
-                <X size={18} />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setOpenCell(null)}
+              className="btn btn-ghost absolute top-3 end-3 p-2"
+              aria-label="إغلاق"
+            >
+              <X size={18} />
+            </button>
+
+            <h3 className="text-xl font-extrabold mb-1 text-center">
+              {openCell.col.label}
+            </h3>
+            <p className="text-sm text-[var(--text-secondary)] text-center mb-5">
+              صف {openCell.row} — {openCell.meds.length} صنف
+            </p>
+
             <div className="space-y-2">
               {openCell.meds.map((m) => (
                 <div key={m.id} className="glass glass-xs p-3">
@@ -138,7 +150,7 @@ export default function ShelfMap({ highlight }) {
                 </div>
               ))}
             </div>
-          </div>
+          </GlassCard>
         </div>
       )}
     </div>
