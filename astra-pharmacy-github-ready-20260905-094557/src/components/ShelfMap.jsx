@@ -104,9 +104,10 @@ export default function ShelfMap({ highlight }) {
       )}
 
       {/* Cell detail modal — lists every medicine sharing this position.
-          Same visual pattern as PinPad: blurred dark backdrop + a real
-          GlassCard, so it feels consistent with the rest of the app
-          instead of a plain floating white box. */}
+          Redesigned to match the app's actual "سهل ممتنع" identity:
+          a colored accent badge pulled from the column's own color, a
+          slim hairline-divided list instead of stacked white boxes,
+          and a sticky header so nothing feels cramped or clipped. */}
       {openCell && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -118,35 +119,54 @@ export default function ShelfMap({ highlight }) {
           />
           <GlassCard
             strong
-            className="relative max-w-sm w-full max-h-[80vh] overflow-auto p-6"
+            className="relative max-w-sm w-full max-h-[min(80vh,640px)] flex flex-col overflow-hidden p-0"
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              type="button"
-              onClick={() => setOpenCell(null)}
-              className="btn btn-ghost absolute top-3 end-3 p-2"
-              aria-label="إغلاق"
-            >
-              <X size={18} />
-            </button>
+            {/* Header — sticky, colored accent from the column itself */}
+            <div className="flex items-center gap-3 px-5 pt-5 pb-4 shrink-0">
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center text-white font-extrabold text-sm shrink-0 shadow-sm"
+                style={{ backgroundColor: openCell.col.color }}
+              >
+                {columnLetter(openCell.col.id)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-extrabold truncate">
+                  {openCell.col.label}
+                </h3>
+                <p className="text-xs text-[var(--text-secondary)]">
+                  صف {openCell.row} · {openCell.meds.length} صنف
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpenCell(null)}
+                className="btn btn-ghost !p-2 shrink-0"
+                aria-label="إغلاق"
+              >
+                <X size={16} />
+              </button>
+            </div>
 
-            <h3 className="text-xl font-extrabold mb-1 text-center">
-              {openCell.col.label}
-            </h3>
-            <p className="text-sm text-[var(--text-secondary)] text-center mb-5">
-              صف {openCell.row} — {openCell.meds.length} صنف
-            </p>
-
-            <div className="space-y-2">
+            {/* List — slim rows, hairline dividers, no boxed-in feel */}
+            <div className="overflow-y-auto px-5 pb-5 divide-y divide-[var(--glass-border)]">
               {openCell.meds.map((m) => (
-                <div key={m.id} className="glass glass-xs p-3">
-                  <div className="font-bold text-sm">{m.tradeName}</div>
-                  <div className="text-xs text-[var(--text-secondary)]">
-                    {m.scientificName} • {m.condition}
+                <div key={m.id} className="flex items-center gap-3 py-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm truncate">{m.tradeName}</div>
+                    <div className="text-xs text-[var(--text-secondary)] truncate">
+                      {m.scientificName} • {m.condition}
+                    </div>
                   </div>
-                  <div className="text-xs text-[var(--text-secondary)] mt-1">
-                    الكمية المتوفرة: {m.qty}
-                  </div>
+                  <span
+                    className="text-xs font-semibold shrink-0 px-2 py-1 rounded-full"
+                    style={{
+                      backgroundColor: `${openCell.col.color}1a`,
+                      color: openCell.col.color,
+                    }}
+                  >
+                    {m.qty}
+                  </span>
                 </div>
               ))}
             </div>
