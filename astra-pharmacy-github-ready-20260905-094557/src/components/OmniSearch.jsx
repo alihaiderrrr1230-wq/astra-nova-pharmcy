@@ -31,7 +31,7 @@ export default function OmniSearch({ compact = false, wide = false }) {
         m.barcode?.toLowerCase().includes(q)
       );
     });
-    return matches.slice(0, 12);
+    return matches;
   }, [query, state.medicines]);
 
   // Close on outside click
