@@ -288,6 +288,15 @@ html.dark .glass::before {
   box-shadow: inset 0 1px 0 var(--glass-border-inner), 0 0 0 3px rgba(167, 139, 250, 0.2);
 }
 
+/* Wide omni-search pill (Home page) — the pill radius lives on the
+   input itself now, not on a wrapping .glass container, so nothing
+   ever clips or visually clashes with the results dropdown below it. */
+.omni-search-pill {
+  border-radius: 999px;
+  padding-top: 0.85rem;
+  padding-bottom: 0.85rem;
+}
+
 .select {
   appearance: none;
   -webkit-appearance: none;
