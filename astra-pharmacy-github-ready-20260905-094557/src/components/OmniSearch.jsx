@@ -94,7 +94,7 @@ export default function OmniSearch({ compact = false, wide = false }) {
         />
         <input
           type="text"
-          className="input ps-9 pe-9"
+          className={`input ps-9 pe-9 ${wide ? 'omni-search-pill' : ''}`}
           placeholder="بحث شامل (اسم، مرض، مخزن، بلد)…"
           value={query}
           onChange={(e) => {
