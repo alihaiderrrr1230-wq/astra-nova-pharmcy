@@ -31,7 +31,7 @@ export default function OmniSearch({ compact = false, wide = false }) {
         m.barcode?.toLowerCase().includes(q)
       );
     });
-    return matches;
+    return matches.slice(0, 12);
   }, [query, state.medicines]);
 
   // Close on outside click
@@ -122,7 +122,8 @@ export default function OmniSearch({ compact = false, wide = false }) {
 
       {open && query && (
         <div
-          className="absolute z-50 start-0 end-0 mt-2 glass glass-sm p-2 max-h-80 overflow-auto"
+          className="absolute z-50 start-0 end-0 mt-2 glass glass-sm p-2"
+          style={{ maxHeight: '22rem', overflowY: 'auto' }}
           role="listbox"
         >
           {results.length === 0 ? (
