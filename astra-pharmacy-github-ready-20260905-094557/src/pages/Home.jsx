@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   ArrowUpRight,
   ShoppingCart,
+  Check,
 } from 'lucide-react';
 import GlassCard from '../components/GlassCard.jsx';
 import OmniSearch from '../components/OmniSearch.jsx';
@@ -17,12 +18,15 @@ import { REORDER_THRESHOLD } from '../data/mockData.js';
 // ---------------------------------------------------------------------
 // Home — simplified, redesigned:
 //  1. A minimal welcome card (name + Hijri + Gregorian dates only).
-//  2. A wide pill-shaped omni search bar (moved here from the TopNav).
-//  3. Two loop boxes (best-sellers 2x2 rotating + rotating phrases).
-// 
-// UPDATED:
-//  - Top-selling now rotates 20 medicines (displays 4 at a time, every 10 sec)
-//  - Added "Add to Cart" button on each medicine
+//  2. A wide pill search bar — the pill shape lives on the <input>
+//     itself (see OmniSearch's `omni-search-pill` class), NOT on a
+//     wrapping glass container. That wrapper was the actual cause of
+//     the stray oval shape behind the results dropdown, so it's gone.
+//  3. Best-sellers loop: rotates through the top 20 medicines (last 30
+//     days), 4 at a time, every 10 seconds. Clicking a card adds that
+//     medicine straight to the POS cart.
+//  4. Rotating phrases box.
+//  5. Business visibility (low stock + expiry) — moved here from Admin.
 // ---------------------------------------------------------------------
 
 function formatGregorian(d) {
@@ -47,10 +51,10 @@ function formatHijri(d) {
 }
 
 export default function Home() {
-  const { state, setSettings } = useAstraStore();
+  const { state, setSettings, addToCart, setHighlighterShelf } = useAstraStore();
   const today = useMemo(() => new Date(), []);
 
-  // Top-selling (last 30 days) — NOW 20 MEDICINES
+  // Top-selling (last 30 days) — top 20, shown 4 at a time, rotating.
   const topSelling = useMemo(() => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 30);
@@ -66,23 +70,33 @@ export default function Home() {
       }))
       .filter((e) => e.med)
       .sort((a, b) => b.qty - a.qty)
-      .slice(0, 20); // ← CHANGED FROM 4 TO 20
+      .slice(0, 20);
   }, [state.salesLog, state.medicines]);
 
-  // Top-selling rotation — show 4 items, rotate every 10 seconds
-  const [topSellingIndex, setTopSellingIndex] = useState(0);
+  const PAGE_SIZE = 4;
+  const pageCount = Math.max(1, Math.ceil(topSelling.length / PAGE_SIZE));
+  const [topSellingPage, setTopSellingPage] = useState(0);
   useEffect(() => {
-    if (topSelling.length <= 4) return;
+    if (topSelling.length <= PAGE_SIZE) return;
     const interval = setInterval(() => {
-      setTopSellingIndex((prev) => (prev + 4) % topSelling.length);
-    }, 10000); // ← 10 SECONDS
+      setTopSellingPage((p) => (p + 1) % pageCount);
+    }, 10000);
     return () => clearInterval(interval);
-  }, [topSelling.length]);
+  }, [topSelling.length, pageCount]);
 
   const displayedTopSelling = topSelling.slice(
-    topSellingIndex,
-    topSellingIndex + 4
+    topSellingPage * PAGE_SIZE,
+    topSellingPage * PAGE_SIZE + PAGE_SIZE
   );
+
+  // Brief "✓ أضيف" confirmation per medicine after a loop click.
+  const [justAdded, setJustAdded] = useState(null);
+  function handleQuickAdd(med) {
+    addToCart(med.id, 1);
+    setHighlighterShelf(med.shelf);
+    setJustAdded(med.id);
+    setTimeout(() => setJustAdded((cur) => (cur === med.id ? null : cur)), 1200);
+  }
 
   // Phrase rotation
   const [phraseIndex, setPhraseIndex] = useState(0);
@@ -93,18 +107,6 @@ export default function Home() {
     }, 8000);
     return () => clearInterval(i);
   }, [state.phrases.length]);
-
-  // Add to cart handler
-  const handleAddToCart = (medicine) => {
-    // التحقق من وجود دالة إضافة للسلة في المتجر
-    if (state.addToCart) {
-      state.addToCart(medicine);
-    } else if (typeof state.cart !== 'undefined') {
-      // Fallback: إضافة يدوية إذا كانت السلة موجودة بالـ state
-      console.log('تمت إضافة:', medicine.tradeName);
-      // يمكنك استبدال هذا بدالة من المتجر لاحقاً
-    }
-  };
 
   // Business visibility — low stock + expiry warnings. Moved here from
   // Admin so the whole team sees it at a glance, no PIN needed.
@@ -147,13 +149,9 @@ export default function Home() {
       <GlassCard className="p-5" strong>
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            {/* Medical badge — replaces the old mosque emoji with an
-                icon that actually matches a pharmacy's identity. */}
             <div
               className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"
-              style={{
-                background: 'linear-gradient(135deg, #0B3D91, #1E5FCC)',
-              }}
+              style={{ background: 'linear-gradient(135deg, #0B3D91, #1E5FCC)' }}
             >
               <Stethoscope size={20} className="text-white" strokeWidth={2.2} />
             </div>
@@ -220,19 +218,12 @@ export default function Home() {
         </div>
       </GlassCard>
 
-      {/* 2) Wide pill search bar */}
-      <div className="w-full">
-        <div
-          className="glass glass-sm p-2"
-          style={{ borderRadius: 999, overflow: 'visible' }}
-        >
-          <OmniSearch wide />
-        </div>
-      </div>
+      {/* 2) Wide pill search bar — no wrapping glass container anymore */}
+      <OmniSearch wide />
 
       {/* 3) Two loop boxes side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Best sellers 2x2 — NOW ROTATING 20 MEDICINES */}
+        {/* Best sellers — rotates top 20, 4 at a time, every 10s */}
         <GlassCard className="p-5" strong distort>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-extrabold flex items-center gap-2">
@@ -240,7 +231,7 @@ export default function Home() {
               الأكثر مبيعاً
             </h2>
             <span className="text-xs text-[var(--text-secondary)]">
-              آخر 30 يوم — {topSelling.length} دواء
+              آخر 30 يوم — اضغط لإضافة للكاشير
             </span>
           </div>
           {topSelling.length === 0 ? (
@@ -251,13 +242,27 @@ export default function Home() {
             <>
               <div className="grid grid-cols-2 gap-3">
                 {displayedTopSelling.map((e, i) => (
-                  <div
-                    key={`${e.med.id}-${topSellingIndex}`}
-                    className="glass glass-xs p-3 flex flex-col gap-2 min-h-[140px] justify-between"
+                  <button
+                    type="button"
+                    key={e.med.id}
+                    onClick={() => handleQuickAdd(e.med)}
+                    disabled={e.med.qty <= 0}
+                    className="glass glass-xs p-3 flex flex-col gap-1 min-h-[110px] justify-between text-start relative transition-transform active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                    title={
+                      e.med.qty <= 0
+                        ? 'نفد من المخزون'
+                        : `إضافة ${e.med.tradeName} للسلة`
+                    }
                   >
+                    {justAdded === e.med.id && (
+                      <span className="absolute inset-0 flex items-center justify-center gap-1 rounded-[10px] bg-emerald-600/90 text-white text-xs font-bold z-10">
+                        <Check size={14} />
+                        أضيف للسلة
+                      </span>
+                    )}
                     <div>
                       <div className="text-[10px] text-[var(--text-secondary)] uppercase">
-                        #{topSellingIndex + i + 1}
+                        #{topSellingPage * PAGE_SIZE + i + 1}
                       </div>
                       <div className="font-extrabold text-sm leading-tight truncate">
                         {e.med.tradeName}
@@ -270,37 +275,23 @@ export default function Home() {
                       <span className="text-[10px] text-[var(--text-secondary)]">
                         عمود {e.med.shelf}
                       </span>
-                      <span className="chip chip-mint !text-xs !px-2 !py-0.5">
+                      <span className="chip chip-mint !text-xs !px-2 !py-0.5 flex items-center gap-1">
+                        <ShoppingCart size={10} />
                         {e.qty}
                       </span>
                     </div>
-                    {/* ADD TO CART BUTTON */}
-                    <button
-                      type="button"
-                      onClick={() => handleAddToCart(e.med)}
-                      className="btn btn-primary !text-xs !py-1.5 !px-2 w-full flex items-center justify-center gap-1 transition-all hover:scale-105"
-                      title={`إضافة ${e.med.tradeName} للسلة`}
-                    >
-                      <ShoppingCart size={14} />
-                      إضافة للسلة
-                    </button>
-                  </div>
+                  </button>
                 ))}
               </div>
-              {/* Rotation indicators */}
-              {topSelling.length > 4 && (
+              {pageCount > 1 && (
                 <div className="flex items-center justify-center gap-1 mt-3">
-                  {Array.from({ length: Math.ceil(topSelling.length / 4) }).map(
-                    (_, i) => (
-                      <span
-                        key={i}
-                        className={`pin-dot ${
-                          i === Math.floor(topSellingIndex / 4) ? 'filled' : ''
-                        }`}
-                        style={{ width: 6, height: 6 }}
-                      />
-                    )
-                  )}
+                  {Array.from({ length: pageCount }).map((_, i) => (
+                    <span
+                      key={i}
+                      className={`pin-dot ${i === topSellingPage ? 'filled' : ''}`}
+                      style={{ width: 6, height: 6 }}
+                    />
+                  ))}
                 </div>
               )}
             </>
