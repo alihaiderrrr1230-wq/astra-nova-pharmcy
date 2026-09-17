@@ -29,7 +29,7 @@ const PAGES = {
 };
 
 export default function App() {
-  const { state } = useAstraStore();
+  const { state, setPin } = useAstraStore();
   const [activePage, setActivePage] = useState('home');
   // Admin auth now persists across page refreshes via localStorage, so
   // the user enters the PIN once and stays unlocked until they
@@ -142,7 +142,16 @@ export default function App() {
       </div>
 
       {showPin && (
-        <PinPad onSuccess={handlePinSuccess} onCancel={handlePinCancel} />
+        <PinPad
+          settingsKey="pin"
+          hasSetKey="hasPinSet"
+          onSetPin={setPin}
+          mode="unlock"
+          title="أدخل رمز الإدارة"
+          subtitle="هذه المنطقة محمية وتتطلب رمز الإدارة"
+          onSuccess={handlePinSuccess}
+          onCancel={handlePinCancel}
+        />
       )}
     </>
   );
