@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import GlassCard from '../components/GlassCard.jsx';
 import OmniSearch from '../components/OmniSearch.jsx';
+import PinPad from '../components/PinPad.jsx';
 import { useAstraStore } from '../store/useAstraStore.js';
 import { REORDER_THRESHOLD } from '../data/mockData.js';
 
@@ -91,11 +92,21 @@ export default function Home() {
 
   // Brief "✓ أضيف" confirmation per medicine after a loop click.
   const [justAdded, setJustAdded] = useState(null);
-  function handleQuickAdd(med) {
+  const [pendingRxMed, setPendingRxMed] = useState(null); // medicine awaiting the medicine PIN
+
+  function performQuickAdd(med) {
     addToCart(med.id, 1);
     setHighlighterShelf(med.shelf);
     setJustAdded(med.id);
     setTimeout(() => setJustAdded((cur) => (cur === med.id ? null : cur)), 1200);
+  }
+
+  function handleQuickAdd(med) {
+    if (med.prescription) {
+      setPendingRxMed(med);
+      return;
+    }
+    performQuickAdd(med);
   }
 
   // Phrase rotation
@@ -280,6 +291,11 @@ export default function Home() {
                         {e.qty}
                       </span>
                     </div>
+                    {e.med.prescription && (
+                      <span className="chip chip-violet !text-[10px] !px-1.5 !py-0.5 absolute top-2 start-2">
+                        وصفة
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -437,6 +453,21 @@ export default function Home() {
           )}
         </GlassCard>
       </div>
+
+      {pendingRxMed && (
+        <PinPad
+          settingsKey="medicinePin"
+          hasSetKey="hasMedicinePinSet"
+          mode="verify"
+          title="رمز الدواء مطلوب"
+          subtitle={`"${pendingRxMed.tradeName}" يتطلب وصفة طبية — أدخل رمز الدواء للمتابعة`}
+          onSuccess={() => {
+            performQuickAdd(pendingRxMed);
+            setPendingRxMed(null);
+          }}
+          onCancel={() => setPendingRxMed(null)}
+        />
+      )}
     </div>
   );
 }
