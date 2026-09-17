@@ -502,6 +502,8 @@ export const DEFAULT_SETTINGS = {
   language: 'ar', // 'ar' | 'en'
   pin: '1234', // default 4-digit PIN, changeable in Settings
   hasPinSet: true, // true once a real PIN exists — gates PinPad's set/enter mode
+  medicinePin: '1234', // separate PIN required to sell prescription-only medicines
+  hasMedicinePinSet: true,
   reducedMotion: false, // respect prefers-reduced-motion automatically
 
   // Facility identity — shown on the Home welcome card instead of a
