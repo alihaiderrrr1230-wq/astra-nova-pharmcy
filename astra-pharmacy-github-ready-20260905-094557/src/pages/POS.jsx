@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import GlassCard from '../components/GlassCard.jsx';
 import BarcodeModal from '../components/BarcodeModal.jsx';
+import PinPad from '../components/PinPad.jsx';
 import { useAstraStore } from '../store/useAstraStore.js';
 import { formatIQD, formatUSD } from '../utils/format.js';
 
@@ -31,6 +32,7 @@ export default function POS() {
   const [error, setError] = useState('');
   const [lastReceipt, setLastReceipt] = useState(null);
   const [pendingBarcode, setPendingBarcode] = useState(null);
+  const [pendingRxMed, setPendingRxMed] = useState(null); // medicine awaiting the medicine PIN
   const [scanFlash, setScanFlash] = useState(false);
   const scanInputRef = useRef(null);
 
@@ -97,8 +99,12 @@ export default function POS() {
     setScanFlash(true);
     setTimeout(() => setScanFlash(false), 400);
     if (med) {
-      addToCart(med.id, 1);
-      setHighlighterShelf(med.shelf);
+      if (med.prescription) {
+        setPendingRxMed(med);
+      } else {
+        addToCart(med.id, 1);
+        setHighlighterShelf(med.shelf);
+      }
       setError('');
     } else {
       setPendingBarcode(code);
@@ -449,6 +455,22 @@ export default function POS() {
         <BarcodeModal
           barcode={pendingBarcode}
           onClose={() => setPendingBarcode(null)}
+        />
+      )}
+
+      {pendingRxMed && (
+        <PinPad
+          settingsKey="medicinePin"
+          hasSetKey="hasMedicinePinSet"
+          mode="verify"
+          title="رمز الدواء مطلوب"
+          subtitle={`"${pendingRxMed.tradeName}" يتطلب وصفة طبية — أدخل رمز الدواء للمتابعة`}
+          onSuccess={() => {
+            addToCart(pendingRxMed.id, 1);
+            setHighlighterShelf(pendingRxMed.shelf);
+            setPendingRxMed(null);
+          }}
+          onCancel={() => setPendingRxMed(null)}
         />
       )}
     </div>
