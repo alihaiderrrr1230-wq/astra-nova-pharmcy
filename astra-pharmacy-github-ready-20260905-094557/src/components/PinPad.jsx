@@ -4,24 +4,57 @@ import { useAstraStore } from '../store/useAstraStore.js';
 import GlassCard from './GlassCard.jsx';
 
 // ---------------------------------------------------------------------
-// PIN pad — used whenever a locked page is entered unauthenticated.
-// - First-time flow: prompt to set a new 4-digit PIN, then confirm by
-//   re-entering; store in localStorage.
-// - Returning flow: prompt for the existing PIN.
-// - Wrong attempts shake the dot row and after 3 consecutive wrong
-//   attempts, briefly disable the pad.
+// PinPad — a single, generic 4-digit PIN component reused everywhere a
+// code is needed in the app: unlocking Admin, changing either PIN
+// (admin or medicine) from a real "old → new → confirm" flow exactly
+// like a phone's PIN change, and a one-shot "verify" prompt used to
+// gate adding a prescription-only medicine to the cart.
+//
+// Props:
+//   settingsKey  — which field in state.settings holds the PIN
+//                  ('pin' for admin, 'medicinePin' for the Rx lock)
+//   hasSetKey    — the matching boolean flag field
+//   onSetPin     — store action to persist a new PIN for this key
+//   mode:
+//     'unlock' (default) — used to gate a whole page (Admin). If no
+//        PIN has ever been set, first asks to create one; otherwise
+//        asks for the existing PIN.
+//     'change' — always asks for the CURRENT pin first (it must
+//        already exist), then a new pin, then confirms it — the
+//        classic phone "change PIN" flow.
+//     'verify' — a single prompt for the existing PIN with no set/
+//        confirm step at all. Used for one-off actions (e.g. adding a
+//        prescription medicine to the cart).
+//   title / subtitle — optional copy overrides for the "enter" stage,
+//        so the same component reads as "رمز الإدارة" or "رمز الدواء"
+//        depending on context.
 // ---------------------------------------------------------------------
 const PIN_LENGTH = 4;
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'];
 
-export default function PinPad({ onSuccess, onCancel }) {
-  const { state, setPin } = useAstraStore();
-  const { pin, hasPinSet } = state.settings;
+export default function PinPad({
+  settingsKey = 'pin',
+  hasSetKey = 'hasPinSet',
+  onSetPin,
+  mode = 'unlock',
+  title,
+  subtitle,
+  onSuccess,
+  onCancel,
+}) {
+  const { state } = useAstraStore();
+  const currentPin = state.settings[settingsKey];
+  const hasPinSet = state.settings[hasSetKey];
 
-  const [stage, setStage] = useState(hasPinSet ? 'enter' : 'set');
-  // 'enter'  : type current PIN to unlock
-  // 'set'    : type a new PIN (first time, or change)
-  // 'confirm': re-type the new PIN to confirm
+  const advanceToChangeAfterEntry = mode === 'change';
+  const initialStage =
+    mode === 'unlock' && !hasPinSet ? 'set' : 'enter';
+
+  const [stage, setStage] = useState(initialStage);
+  // 'enter'   : type the existing PIN (to unlock, to verify, or to
+  //             authorize a change before picking a new one)
+  // 'set'     : type a brand new PIN
+  // 'confirm' : re-type the new PIN to confirm it
   const [firstPin, setFirstPin] = useState('');
   const [entry, setEntry] = useState('');
   const [error, setError] = useState('');
@@ -30,7 +63,6 @@ export default function PinPad({ onSuccess, onCancel }) {
   const [lockedUntil, setLockedUntil] = useState(0);
   const [now, setNow] = useState(Date.now());
 
-  // Tick the lockout timer
   useEffect(() => {
     if (!lockedUntil) return;
     const i = setInterval(() => setNow(Date.now()), 250);
@@ -52,18 +84,23 @@ export default function PinPad({ onSuccess, onCancel }) {
       setEntry(next);
       setError('');
       if (next.length === PIN_LENGTH) {
-        // Process after a tick so the dot fills visually first
         setTimeout(() => processEntry(next), 120);
       }
     },
-    [entry, isLocked] // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [entry, isLocked, stage, firstPin]
   );
 
   function processEntry(value) {
     if (stage === 'enter') {
-      if (value === pin) {
+      if (value === currentPin) {
         setWrongCount(0);
-        onSuccess?.();
+        setEntry('');
+        if (advanceToChangeAfterEntry) {
+          setStage('set');
+        } else {
+          onSuccess?.();
+        }
       } else {
         failAttempt();
       }
@@ -77,13 +114,12 @@ export default function PinPad({ onSuccess, onCancel }) {
     }
     if (stage === 'confirm') {
       if (value === firstPin) {
-        setPin(value);
+        onSetPin?.(value);
         setStage('enter');
         setEntry('');
         setFirstPin('');
         onSuccess?.();
       } else {
-        // restart setup
         setFirstPin('');
         setEntry('');
         setStage('set');
@@ -112,7 +148,6 @@ export default function PinPad({ onSuccess, onCancel }) {
     setTimeout(() => setShake(false), 360);
   }
 
-  // Keyboard support
   useEffect(() => {
     function onKey(e) {
       if (e.key >= '0' && e.key <= '9') press(e.key);
@@ -123,9 +158,9 @@ export default function PinPad({ onSuccess, onCancel }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [press, onCancel]);
 
-  const title =
+  const stageTitle =
     stage === 'enter'
-      ? 'أدخل رمز PIN'
+      ? title || 'أدخل رمز PIN'
       : stage === 'set'
       ? 'اختر رمز PIN جديد (4 أرقام)'
       : 'أعد إدخال الرمز للتأكيد';
@@ -139,7 +174,6 @@ export default function PinPad({ onSuccess, onCancel }) {
       aria-modal="true"
       aria-label="PIN pad"
     >
-      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/30 backdrop-blur-sm"
         onClick={onCancel}
@@ -159,12 +193,11 @@ export default function PinPad({ onSuccess, onCancel }) {
           <X size={16} />
         </button>
 
-        <h2 className="text-xl font-extrabold mb-1 text-center">{title}</h2>
+        <h2 className="text-xl font-extrabold mb-1 text-center">{stageTitle}</h2>
         <p className="text-sm text-[var(--text-secondary)] text-center mb-5">
-          هذه المنطقة محمية وتتطلب رمز الإدارة
+          {subtitle || 'هذه المنطقة محمية وتتطلب رمزاً'}
         </p>
 
-        {/* Dot indicator */}
         <div
           className={`flex items-center justify-center gap-3 mb-2 ${
             shake ? 'shake' : ''
@@ -174,32 +207,24 @@ export default function PinPad({ onSuccess, onCancel }) {
             <span
               key={i}
               className={`pin-dot ${
-                i < entry.length
-                  ? error
-                    ? 'error'
-                    : 'filled'
-                  : ''
+                i < entry.length ? (error ? 'error' : 'filled') : ''
               }`}
             />
           ))}
         </div>
 
-        <div
-          className="min-h-[20px] text-center text-sm mb-3"
-          aria-live="polite"
-        >
+        <div className="min-h-[20px] text-center text-sm mb-3" aria-live="polite">
           {error ? (
             <span className="text-red-500 font-semibold">
               {isLocked ? `${error} (${remaining} ثانية)` : error}
             </span>
           ) : (
             <span className="text-[var(--text-secondary)]">
-              {stage === 'enter' ? '••• رمز الإدارة •••' : 'اختر 4 أرقام'}
+              {stage === 'enter' ? '••••' : 'اختر 4 أرقام'}
             </span>
           )}
         </div>
 
-        {/* Keypad */}
         <div
           className="grid grid-cols-3 gap-2 mt-3"
           style={{ pointerEvents: isLocked ? 'none' : 'auto', opacity: isLocked ? 0.6 : 1 }}
