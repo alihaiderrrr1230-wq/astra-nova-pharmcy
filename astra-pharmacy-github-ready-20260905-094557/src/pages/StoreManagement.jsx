@@ -441,15 +441,15 @@ export default function StoreManagement() {
                 }
               />
             </div>
-            <div className="flex items-center gap-2 mt-2">
+            <div className="md:col-span-2 flex items-center gap-2 mt-2 glass glass-xs px-3 py-2.5">
               <input
                 id="rxFlag"
                 type="checkbox"
                 checked={!!form.prescription}
                 onChange={(e) => setField('prescription', e.target.checked)}
-                className="w-4 h-4"
+                className="w-5 h-5 shrink-0"
               />
-              <label htmlFor="rxFlag" className="text-sm">
+              <label htmlFor="rxFlag" className="text-sm flex-1 cursor-pointer">
                 يتطلب وصفة طبية
               </label>
             </div>
