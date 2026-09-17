@@ -422,6 +422,13 @@ function useAstraStoreInternal() {
     }));
   }, []);
 
+  const setMedicinePin = useCallback((newPin) => {
+    setState((s) => ({
+      ...s,
+      settings: { ...s.settings, medicinePin: newPin, hasMedicinePinSet: true },
+    }));
+  }, []);
+
   // -----------------------------------------------------------------
   // Employees
   // -----------------------------------------------------------------
@@ -668,6 +675,7 @@ function useAstraStoreInternal() {
     removePhrase,
     // PIN
     setPin,
+    setMedicinePin,
     // employees
     addEmployee,
     updateEmployee,
@@ -733,4 +741,3 @@ export function useAstraStore() {
   }
   return ctx;
 }
-
