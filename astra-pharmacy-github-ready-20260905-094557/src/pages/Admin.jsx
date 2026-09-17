@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Database, Wallet, TrendingDown, KeyRound } from 'lucide-react';
+import { Database, Wallet, TrendingDown, KeyRound, Pill, ShieldCheck } from 'lucide-react';
 import GlassCard from '../components/GlassCard.jsx';
 import PinPad from '../components/PinPad.jsx';
 import StoreManagement from './StoreManagement.jsx';
@@ -8,16 +8,18 @@ import Finance from './Finance.jsx';
 import { useAstraStore } from '../store/useAstraStore.js';
 
 // ---------------------------------------------------------------------
-// Admin — the single, unified admin page (replaces the three formerly
-// separate locked items: store / master / finance). After unlocking,
-// the user lands here and can switch between 4 tabs:
+// Admin — the single, unified admin page. After unlocking, the user
+// lands here and can switch between 4 tabs:
 //   1. إدارة المتجر  (existing StoreManagement page, as-is)
 //   2. البيانات الرئيسية  (existing MasterData page, as-is)
 //   3. الحسابات والجرد  (existing Finance page, as-is)
-//   4. تغيير الرمز  (verify current PIN, then set + confirm new)
-// "بيانات العمل" (low-stock + expiry alerts) moved to the Home page —
-// it's business-visibility info the whole team should see at a glance,
-// not something that needs the admin PIN.
+//   4. تغيير الرمز  — TWO independent PINs, each changed with a real
+//      "current → new → confirm" flow (exactly like a phone's PIN
+//      change), both driven by the same generic <PinPad mode="change">:
+//        - رمز الإدارة   (admin PIN — settingsKey "pin")
+//        - رمز الدواء     (medicine/Rx PIN — settingsKey "medicinePin",
+//          required to sell any medicine flagged "يتطلب وصفة طبية")
+// "بيانات العمل" (low-stock + expiry alerts) moved to the Home page.
 // ---------------------------------------------------------------------
 
 const TABS = [
@@ -29,42 +31,11 @@ const TABS = [
 
 export default function Admin() {
   const [tab, setTab] = useState('store');
-  const [pinStage, setPinStage] = useState(null); // null | 'verify' | 'set' | 'confirm'
-  const [pinFlowPin, setPinFlowPin] = useState('');
-  const [pinError, setPinError] = useState('');
+  const { setPin, setMedicinePin } = useAstraStore();
 
-  const { state, setPin } = useAstraStore();
-  const { pin } = state.settings;
-
-  function handlePinChangeSubmit(value) {
-    if (pinStage === 'verify') {
-      if (value === pin) {
-        setPinStage('set');
-        setPinError('');
-      } else {
-        setPinError('الرمز الحالي غير صحيح');
-        setPinStage(null);
-      }
-      return;
-    }
-    if (pinStage === 'set') {
-      setPinFlowPin(value);
-      setPinStage('confirm');
-      return;
-    }
-    if (pinStage === 'confirm') {
-      if (value === pinFlowPin) {
-        setPin(value);
-        setPinStage(null);
-        setPinFlowPin('');
-        setPinError('');
-      } else {
-        setPinError('الرمزان غير متطابقين');
-        setPinFlowPin('');
-        setPinStage('set');
-      }
-    }
-  }
+  // Which PIN's change-flow modal is currently open: null | 'admin' | 'medicine'
+  const [activeChange, setActiveChange] = useState(null);
+  const [justChanged, setJustChanged] = useState(null); // brief success note
 
   return (
     <div className="space-y-4">
@@ -85,9 +56,7 @@ export default function Admin() {
                 type="button"
                 onClick={() => setTab(t.id)}
                 className={`flex items-center gap-2 px-3 py-2 rounded-[14px] text-sm font-semibold ${
-                  tab === t.id
-                    ? 'glass-strong'
-                    : 'bg-white/15 hover:bg-white/30'
+                  tab === t.id ? 'glass-strong' : 'bg-white/15 hover:bg-white/30'
                 }`}
               >
                 <Icon size={16} />
@@ -101,86 +70,96 @@ export default function Admin() {
       {tab === 'store' && <StoreManagement />}
       {tab === 'master' && <MasterData />}
       {tab === 'finance' && <Finance />}
+
       {tab === 'pin' && (
-        <GlassCard className="p-6" strong>
-          <h2 className="text-xl font-extrabold mb-2 flex items-center gap-2">
-            <KeyRound size={20} />
-            تغيير رمز PIN
-          </h2>
-          {pinError && (
-            <p className="text-sm text-red-500 mb-3">{pinError}</p>
-          )}
-          {pinStage === null && (
-            <>
-              <p className="text-sm text-[var(--text-secondary)] mb-4">
-                لإدارة رمز PIN، اضغط الزر أدناه لبدء عملية التغيير. سيُطلب
-                منك إدخال الرمز الحالي للتحقق، ثم الرمز الجديد مرتين.
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Medicine PIN */}
+          <GlassCard className="p-6" strong>
+            <h2 className="text-lg font-extrabold mb-1 flex items-center gap-2">
+              <Pill size={18} className="text-rose-600" />
+              رمز الدواء
+            </h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              يُطلب هذا الرمز عند إضافة أي دواء "يتطلب وصفة طبية" للسلة —
+              من البحث الشامل، من الكاشير، أو بقراءة الباركود.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setJustChanged(null);
+                setActiveChange('medicine');
+              }}
+              className="btn btn-primary"
+            >
+              <KeyRound size={16} />
+              تغيير رمز الدواء
+            </button>
+            {justChanged === 'medicine' && (
+              <p className="text-sm text-emerald-600 font-bold mt-3">
+                ✓ تم تغيير رمز الدواء بنجاح
               </p>
-              <button
-                type="button"
-                onClick={() => setPinStage('verify')}
-                className="btn btn-primary"
-              >
-                <KeyRound size={16} />
-                ابدأ تغيير الرمز
-              </button>
-            </>
-          )}
-          {pinStage === 'verify' && (
-            <p className="text-sm text-[var(--text-secondary)]">
-              أدخل الرمز الحالي للتحقق.
+            )}
+          </GlassCard>
+
+          {/* Admin PIN */}
+          <GlassCard className="p-6" strong>
+            <h2 className="text-lg font-extrabold mb-1 flex items-center gap-2">
+              <ShieldCheck size={18} className="text-violet-600" />
+              رمز الإدارة
+            </h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              يُطلب هذا الرمز للدخول لقسم الإدارة بالكامل (إدارة المتجر،
+              البيانات الرئيسية، المالية).
             </p>
-          )}
-          {pinStage === 'set' && (
-            <p className="text-sm text-[var(--text-secondary)]">
-              أدخل الرمز الجديد (4 أرقام).
-            </p>
-          )}
-          {pinStage === 'confirm' && (
-            <p className="text-sm text-[var(--text-secondary)]">
-              أعد إدخال الرمز الجديد للتأكيد.
-            </p>
-          )}
-          {pinStage === null && pinError === 'تم تغيير الرمز بنجاح' && (
-            <p className="text-sm text-emerald-600 font-bold mt-2">
-              ✓ تم تغيير الرمز بنجاح
-            </p>
-          )}
-        </GlassCard>
+            <button
+              type="button"
+              onClick={() => {
+                setJustChanged(null);
+                setActiveChange('admin');
+              }}
+              className="btn btn-primary"
+            >
+              <KeyRound size={16} />
+              تغيير رمز الإدارة
+            </button>
+            {justChanged === 'admin' && (
+              <p className="text-sm text-emerald-600 font-bold mt-3">
+                ✓ تم تغيير رمز الإدارة بنجاح
+              </p>
+            )}
+          </GlassCard>
+        </div>
       )}
 
-      {(pinStage === 'verify' ||
-        pinStage === 'set' ||
-        pinStage === 'confirm') && (
+      {activeChange === 'medicine' && (
         <PinPad
-          onSuccess={(value) => {
-            if (pinStage === 'verify' && value === pin) {
-              setPinStage('set');
-              setPinError('');
-            } else if (pinStage === 'verify') {
-              setPinError('الرمز الحالي غير صحيح');
-              setPinStage(null);
-            } else if (pinStage === 'set') {
-              setPinFlowPin(value);
-              setPinStage('confirm');
-            } else if (pinStage === 'confirm') {
-              if (value === pinFlowPin) {
-                setPin(value);
-                setPinStage(null);
-                setPinFlowPin('');
-                setPinError('تم تغيير الرمز بنجاح');
-              } else {
-                setPinError('الرمزان غير متطابقين');
-                setPinFlowPin('');
-                setPinStage('set');
-              }
-            }
+          settingsKey="medicinePin"
+          hasSetKey="hasMedicinePinSet"
+          onSetPin={setMedicinePin}
+          mode="change"
+          title="رمز الدواء الحالي"
+          subtitle="أدخل رمز الدواء الحالي، ثم اختر رمزاً جديداً وأكّده."
+          onSuccess={() => {
+            setActiveChange(null);
+            setJustChanged('medicine');
           }}
-          onCancel={() => {
-            setPinStage(null);
-            setPinFlowPin('');
-            setPinError('');
+          onCancel={() => setActiveChange(null)}
+        />
+      )}
+
+      {activeChange === 'admin' && (
+        <PinPad
+          settingsKey="pin"
+          hasSetKey="hasPinSet"
+          onSetPin={setPin}
+          mode="change"
+          title="رمز الإدارة الحالي"
+          subtitle="أدخل رمز الإدارة الحالي، ثم اختر رمزاً جديداً وأكّده."
+          onSuccess={() => {
+            setActiveChange(null);
+            setJustChanged('admin');
           }}
+          onCancel={() => setActiveChange(null)}
         />
       )}
     </div>
