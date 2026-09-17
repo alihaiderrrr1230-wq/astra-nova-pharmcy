@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Search, Plus, X } from 'lucide-react';
 import { useAstraStore } from '../store/useAstraStore.js';
+import PinPad from './PinPad.jsx';
 
 // ---------------------------------------------------------------------
 // OmniSearch — global search by trade name, scientific name, disease /
@@ -13,6 +14,7 @@ export default function OmniSearch({ compact = false, wide = false }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [pendingRxMed, setPendingRxMed] = useState(null); // medicine awaiting the medicine PIN
   const containerRef = useRef(null);
 
   const results = useMemo(() => {
@@ -31,7 +33,7 @@ export default function OmniSearch({ compact = false, wide = false }) {
         m.barcode?.toLowerCase().includes(q)
       );
     });
-    return matches;
+    return matches.slice(0, 12);
   }, [query, state.medicines]);
 
   // Close on outside click
@@ -55,9 +57,17 @@ export default function OmniSearch({ compact = false, wide = false }) {
     setQuery('');
   }
 
-  function handleAdd(med) {
+  function performAdd(med) {
     addToCart(med.id, 1);
     setHighlighterShelf(med.shelf);
+  }
+
+  function handleAdd(med) {
+    if (med.prescription) {
+      setPendingRxMed(med);
+      return;
+    }
+    performAdd(med);
   }
 
   function handleKeyDown(e) {
@@ -150,6 +160,11 @@ export default function OmniSearch({ compact = false, wide = false }) {
                         نفد
                       </span>
                     )}
+                    {med.prescription && (
+                      <span className="chip chip-violet ms-2 !py-0 !text-[10px]">
+                        وصفة طبية
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs text-[var(--text-secondary)] truncate">
                     {med.condition} • {med.form} • {med.dose} • عمود {med.shelf}
@@ -178,6 +193,21 @@ export default function OmniSearch({ compact = false, wide = false }) {
             ))
           )}
         </div>
+      )}
+
+      {pendingRxMed && (
+        <PinPad
+          settingsKey="medicinePin"
+          hasSetKey="hasMedicinePinSet"
+          mode="verify"
+          title="رمز الدواء مطلوب"
+          subtitle={`"${pendingRxMed.tradeName}" يتطلب وصفة طبية — أدخل رمز الدواء للمتابعة`}
+          onSuccess={() => {
+            performAdd(pendingRxMed);
+            setPendingRxMed(null);
+          }}
+          onCancel={() => setPendingRxMed(null)}
+        />
       )}
     </div>
   );
